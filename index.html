@@ -665,6 +665,16 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   function boxDisplay(it){ return '<span class="box-chip">Lv.'+ (it.box+1) +'</span>'; }
 
+  function subDisplay(cat, it){
+    if (cat === 'kanji'){
+      var parts = [];
+      if (it.onyomi) parts.push('음: ' + it.onyomi);
+      if (it.kunyomi) parts.push('훈: ' + it.kunyomi);
+      return parts.join('  ');
+    }
+    return SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
+  }
+
   function renderList(cat){
     var items = data[cat].slice().sort(function(a,b){ return a.next < b.next ? -1 : 1; });
     if (!items.length) return '<div class="empty-note">아직 추가된 '+CATS[cat].label+' 항목이 없어요.</div>';
@@ -672,7 +682,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var rows = items.map(function(it){
       var isDue = it.next <= t;
       var titleField = it[TITLE_KEY[cat]];
-      var subField = SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
+      var subField = subDisplay(cat, it);
       var isEditing = !!state.editMode[it.id];
       var body = isEditing ? renderEditForm(cat, it) : renderDetail(cat, it);
       var openClass = (state.openDetail[it.id] || isEditing) ? '' : ' hidden';
@@ -694,7 +704,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
 
   function renderDetail(cat, it){
-    var rows = [['등록일', it.created]].concat(backRowsForDetail(cat, it));
+    var rows = backRowsForDetail(cat, it);
     var html = rows.filter(function(r){ return r[1]; }).map(function(r){
       return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>';
     }).join('');
@@ -704,12 +714,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '</div>';
     return html;
   }
+  // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
+  // and the created/next-review chips) are repeated here.
   function backRowsForDetail(cat, it){
     var rows;
-    if (cat === 'vocab') rows = [['읽기',it.reading],['뜻',it.meaning],['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
-    else if (cat === 'kanji') rows = [['음독',it.onyomi],['훈독',it.kunyomi],['뜻',it.meaning],['대표 단어',it.example],['비고',it.note]];
-    else if (cat === 'grammar') rows = [['접속 형태',it.conjugation],['의미',it.meaning],['비고',it.note],['나만의 문장',it.mySentence]];
-    else rows = [['의미',it.meaning],['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
+    if (cat === 'vocab') rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
+    else if (cat === 'kanji') rows = [['대표 단어',it.example],['비고',it.note]];
+    else if (cat === 'grammar') rows = [['비고',it.note],['나만의 문장',it.mySentence]];
+    else rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
     if (cat === 'expr' && it.unknownWords && it.unknownWords.length){
       rows.push(['모르는 단어', it.unknownWords.map(function(w){
         var parts = [w.word]; if (w.reading) parts.push('('+w.reading+')'); if (w.meaning) parts.push('— '+w.meaning);
