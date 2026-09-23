@@ -147,6 +147,15 @@
   .genko-cell input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'Noto Serif JP', serif; font-size: 34px; color: var(--ink); position: relative; z-index: 1; }
   .genko-cell input:focus { outline: 2px solid var(--jade); outline-offset: 2px; }
 
+  .list-controls { margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .search-input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 14px; }
+  .sort-row { display: flex; gap: 6px; }
+  .sort-row button { font-size: 12px; padding: 6px 12px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--muted); cursor: pointer; }
+  .sort-row button.active { background: var(--ink); color: var(--paper-card); border-color: var(--ink); }
+  .kana-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .kana-chip { font-size: 12px; padding: 5px 10px; border-radius: 14px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--muted); cursor: pointer; font-family: 'Noto Serif JP', serif; }
+  .kana-chip.active { background: var(--jade); color: #fff; border-color: var(--jade); }
+
   .item-list { display: flex; flex-direction: column; gap: 8px; }
   .item-row { border: 1px solid var(--line); border-radius: 7px; padding: 12px 14px; background: var(--paper); display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
   .item-row .main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -425,7 +434,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
 
   // ---------- Theme ----------
-  var state = { activeTab: 'review', reviewQueue: null, reviewIdx: 0, reviewFlipped: false, openDetail: {}, editMode: {}, theme: 'light' };
+  var state = { activeTab: 'review', reviewQueue: null, reviewIdx: 0, reviewFlipped: false, openDetail: {}, editMode: {}, theme: 'light',
+    search: { vocab:'', kanji:'', grammar:'', expr:'' },
+    sortMode: { vocab:'due', kanji:'due', grammar:'due', expr:'due' },
+    kanaFilter: { vocab:null, kanji:null, grammar:null, expr:null }
+  };
 
   function initialTheme(){
     var saved = null;
@@ -643,8 +656,23 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }
     formHtml += '<div class="actions"><button type="submit" class="primary">'+ADD_LABEL[cat]+'</button></div></form>';
 
-    panel.innerHTML = formHtml + renderList(cat);
+    var controlsHtml = '<div class="list-controls">' +
+      '<input type="text" class="search-input" id="'+cat+'-search" placeholder="검색 (단어·뜻·읽기 등)" value="'+esc(state.search[cat]||'')+'">' +
+      '<div class="sort-row" id="'+cat+'-sort-row"></div>' +
+      '<div class="kana-row" id="'+cat+'-kana-row"></div>' +
+      '</div>' +
+      '<div id="'+cat+'-list-container">' + renderListMarkup(cat) + '</div>';
+
+    panel.innerHTML = formHtml + controlsHtml;
+    renderSortRow(cat);
+    renderKanaRow(cat);
     bindListEvents(cat);
+
+    var searchInput = document.getElementById(cat + '-search');
+    searchInput.addEventListener('input', function(){
+      state.search[cat] = searchInput.value;
+      refreshListOnly(cat);
+    });
 
     if (isExpr){
       renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
@@ -663,8 +691,97 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
   }
 
+  function renderSortRow(cat){
+    var wrap = document.getElementById(cat + '-sort-row');
+    if (!wrap) return;
+    wrap.innerHTML =
+      '<button data-sort="due" class="'+(state.sortMode[cat]==='due'?'active':'')+'">복습순</button>' +
+      '<button data-sort="kana" class="'+(state.sortMode[cat]==='kana'?'active':'')+'">발음순 (あいうえお)</button>';
+    wrap.querySelectorAll('[data-sort]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        state.sortMode[cat] = btn.getAttribute('data-sort');
+        renderSortRow(cat);
+        refreshListOnly(cat);
+      });
+    });
+  }
+  function renderKanaRow(cat){
+    var wrap = document.getElementById(cat + '-kana-row');
+    if (!wrap) return;
+    var keys = KANA_ROWS.map(function(r){ return r.key; }).concat(['기타']);
+    wrap.innerHTML = keys.map(function(k){
+      return '<button class="kana-chip'+(state.kanaFilter[cat]===k?' active':'')+'" data-kana="'+esc(k)+'">'+esc(k)+'</button>';
+    }).join('');
+    wrap.querySelectorAll('[data-kana]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var k = btn.getAttribute('data-kana');
+        state.kanaFilter[cat] = (state.kanaFilter[cat] === k) ? null : k;
+        renderKanaRow(cat);
+        refreshListOnly(cat);
+      });
+    });
+  }
+  function refreshListOnly(cat){
+    var container = document.getElementById(cat + '-list-container');
+    if (!container) return;
+    container.innerHTML = renderListMarkup(cat);
+    bindListEvents(cat);
+  }
+
   function boxDisplay(it){ return '<span class="box-chip">Lv.'+ (it.box+1) +'</span>'; }
 
+  var KANA_ROWS = [
+    { key:'あ', chars:'あいうえおぁぃぅぇぉ' },
+    { key:'か', chars:'かきくけこがぎぐげご' },
+    { key:'さ', chars:'さしすせそざじずぜぞ' },
+    { key:'た', chars:'たちつてとだぢづでどっ' },
+    { key:'な', chars:'なにぬねの' },
+    { key:'は', chars:'はひふへほばびぶべぼぱぴぷぺぽ' },
+    { key:'ま', chars:'まみむめも' },
+    { key:'や', chars:'やゆよゃゅょ' },
+    { key:'ら', chars:'らりるれろ' },
+    { key:'わ', chars:'わをん' }
+  ];
+  function toHiragana(ch){
+    var code = ch.codePointAt(0);
+    if (code >= 0x30A1 && code <= 0x30FA) return String.fromCharCode(code - 0x60);
+    return ch;
+  }
+  function kanaRowOf(str){
+    if (!str) return null;
+    var ch = toHiragana(str.trim().charAt(0));
+    for (var i = 0; i < KANA_ROWS.length; i++){
+      if (KANA_ROWS[i].chars.indexOf(ch) !== -1) return KANA_ROWS[i].key;
+    }
+    return null; // 한자·로마자 등 가나로 시작하지 않는 항목 -> "기타"
+  }
+  function readingKeyOf(cat, it){
+    if (cat === 'vocab') return it.reading || it.word || '';
+    if (cat === 'kanji') return it.onyomi || it.kunyomi || it.kanji || '';
+    if (cat === 'grammar') return it.pattern || '';
+    return it.expr || '';
+  }
+  function searchableText(cat, it){
+    var parts = [it[TITLE_KEY[cat]], it.meaning, it.example, it.note, it.mySentence];
+    if (cat === 'vocab') parts.push(it.reading);
+    if (cat === 'kanji') parts.push(it.onyomi, it.kunyomi);
+    if (cat === 'grammar') parts.push(it.conjugation);
+    if (cat === 'expr' && it.unknownWords) it.unknownWords.forEach(function(w){ parts.push(w.word, w.reading, w.meaning); });
+    return parts.filter(Boolean).join(' ').toLowerCase();
+  }
+  function filteredSortedItems(cat){
+    var items = data[cat].slice();
+    var term = (state.search[cat] || '').trim().toLowerCase();
+    if (term) items = items.filter(function(it){ return searchableText(cat, it).indexOf(term) !== -1; });
+    var kf = state.kanaFilter[cat];
+    if (kf) items = items.filter(function(it){ return kanaRowOf(readingKeyOf(cat, it)) === (kf === '기타' ? null : kf); });
+    if (state.sortMode[cat] === 'kana'){
+      items.sort(function(a,b){ return readingKeyOf(cat,a).localeCompare(readingKeyOf(cat,b), 'ja'); });
+    } else {
+      items.sort(function(a,b){ return a.next < b.next ? -1 : 1; });
+    }
+    return items;
+  }
   function subDisplay(cat, it){
     if (cat === 'kanji'){
       var parts = [];
@@ -675,9 +792,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
   }
 
-  function renderList(cat){
-    var items = data[cat].slice().sort(function(a,b){ return a.next < b.next ? -1 : 1; });
-    if (!items.length) return '<div class="empty-note">아직 추가된 '+CATS[cat].label+' 항목이 없어요.</div>';
+  function renderListMarkup(cat){
+    var items = filteredSortedItems(cat);
+    if (!items.length){
+      var hasAny = data[cat].length > 0;
+      return '<div class="empty-note">'+(hasAny ? '조건에 맞는 항목이 없어요.' : '아직 추가된 '+CATS[cat].label+' 항목이 없어요.')+'</div>';
+    }
     var t = todayStr();
     var rows = items.map(function(it){
       var isDue = it.next <= t;
@@ -702,6 +822,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }).join('');
     return '<div class="item-list">' + rows + '</div>';
   }
+
 
   function renderDetail(cat, it){
     var rows = backRowsForDetail(cat, it);
