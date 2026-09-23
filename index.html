@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>일본어 학습 노트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@500;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (compat SDK — no build step needed, works straight from GitHub Pages) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root {
+    --paper: #FAF7F0; --paper2: #EFE8D8; --paper-card: #FFFFFF;
+    --line: #DED2B8; --line-strong: #C2B394;
+    --ink: #262019; --muted: #79705D;
+    --hanko: #A63D2F; --jade: #4E7A67; --indigo: #3D5A80; --purple-acc: #7A5C96;
+    --jade-dim: #D9E7DF; --hanko-dim: #F0D9D3;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink); font-family: 'Noto Sans KR', sans-serif; }
+
+  :root[data-theme="dark"] {
+    --paper:#1E1B17; --paper2:#262220; --paper-card:#241F1A;
+    --line:#4A4238; --line-strong:#5C5344; --ink:#EDE6D6; --muted:#A69B87;
+    --jade-dim:#28352F; --hanko-dim:#3D2620;
+  }
+  :root[data-theme="blue"] {
+    --paper:#EAF2F8; --paper2:#DCE9F3; --paper-card:#FFFFFF;
+    --line:#C9DCEA; --line-strong:#A9C6DC; --ink:#1B2A3A; --muted:#5E7185;
+    --jade-dim:#D9E7DF; --hanko-dim:#F0D9D3;
+  }
+  :root[data-theme="green"] {
+    --paper:#EAF5EC; --paper2:#DCEEE0; --paper-card:#FFFFFF;
+    --line:#C3E0C9; --line-strong:#A0CBA9; --ink:#1C3324; --muted:#5B7A64;
+    --jade-dim:#D2E9D8; --hanko-dim:#F0D9D3;
+  }
+  :root[data-theme="red"] {
+    --paper:#FBEDEC; --paper2:#F5DEDC; --paper-card:#FFFFFF;
+    --line:#EBC4C0; --line-strong:#DA9F98; --ink:#3B1917; --muted:#8A5C57;
+    --jade-dim:#D9E7DF; --hanko-dim:#F3D3CE;
+  }
+  :root[data-theme="yellow"] {
+    --paper:#FBF4DC; --paper2:#F5E9BE; --paper-card:#FFFFFF;
+    --line:#E9D695; --line-strong:#D9BE66; --ink:#3A2E0E; --muted:#8A7743;
+    --jade-dim:#E3E7C9; --hanko-dim:#F0D9D3;
+  }
+  :root[data-theme="purple"] {
+    --paper:#F3EDF8; --paper2:#E7DCF1; --paper-card:#FFFFFF;
+    --line:#D9C7E9; --line-strong:#C1A2DA; --ink:#2C1E3B; --muted:#715C86;
+    --jade-dim:#DCE3DE; --hanko-dim:#EBD8ED;
+  }
+
+  h1, h2, h3, .serif { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; }
+  #app { max-width: 900px; margin: 0 auto; padding: 24px 18px 60px; display: none; }
+  #login-screen { max-width: 380px; margin: 60px auto; padding: 0 18px; }
+
+  header.top { margin-bottom: 20px; position: relative; padding-top: 4px; }
+  header.top .title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-right: 130px; }
+  header.top h1 { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: 0.02em; }
+  header.top .stamp {
+    display: inline-block; border: 2px solid var(--hanko); color: var(--hanko);
+    font-size: 12px; padding: 2px 8px; border-radius: 3px; transform: rotate(-3deg);
+    font-family: 'Noto Serif JP', serif; font-weight: 700;
+  }
+  header.top p.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; padding-right: 130px; }
+  .sync-badge { color: var(--muted); font-size: 12px; display: block; margin-top: 4px; cursor: help; }
+  .logout-row { margin-top: 6px; }
+  .logout-row button { font-size: 12px; }
+
+  .theme-row { position: absolute; top: 2px; right: 0; display: flex; align-items: center; gap: 5px; }
+  .theme-dot {
+    width: 15px; height: 15px; border-radius: 50%; border: 2px solid transparent;
+    cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+  }
+  .theme-dot.active { border-color: var(--ink); transform: scale(1.25); }
+  @media (max-width: 560px) {
+    header.top .title-row, header.top p.sub { padding-right: 0; }
+    .theme-row { position: static; margin-top: 8px; justify-content: flex-start; }
+  }
+
+  nav.tabs { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; border-bottom: 3px solid var(--line-strong); padding-bottom: 0; }
+  nav.tabs button {
+    font-family: 'Noto Serif JP', serif; font-size: 14px; font-weight: 500; padding: 10px 16px 9px;
+    background: var(--paper2); color: var(--muted); border: none; border-radius: 8px 8px 0 0;
+    cursor: pointer; position: relative; top: 3px; display: flex; align-items: center; gap: 6px;
+    transition: transform 0.15s ease;
+  }
+  nav.tabs button.active {
+    background: var(--paper-card); color: var(--ink); font-weight: 700; top: 0;
+    border-bottom: 3px solid var(--paper-card); box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
+  }
+  nav.tabs button .badge { background: var(--hanko); color: #fff; border-radius: 10px; font-size: 11px; padding: 1px 6px; font-family: 'Noto Sans KR', sans-serif; }
+  nav.tabs button:not(.active):hover { transform: translateY(-2px); }
+
+  section.panel { background: var(--paper-card); border-radius: 0 10px 10px 10px; padding: 22px; min-height: 300px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  section.panel.hidden { display: none; }
+
+  .review-summary { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .review-card { flex: 1 1 130px; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--paper); }
+  .review-card .n { font-size: 24px; font-weight: 700; font-family: 'Noto Serif JP', serif; }
+  .review-card .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .review-start-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .cat-vocab { color: var(--hanko); } .cat-kanji { color: var(--jade); }
+  .cat-grammar { color: var(--indigo); } .cat-expr { color: var(--purple-acc); }
+
+  button.primary { background: var(--ink); color: var(--paper-card); border: none; padding: 11px 20px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: 'Noto Sans KR', sans-serif; }
+  button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: transparent; border: 1px solid var(--line-strong); color: var(--ink); padding: 9px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button.ghost { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; text-decoration: underline; }
+  button.icon-x { background: var(--paper); border: 1px solid var(--line); color: var(--hanko); border-radius: 5px; width: 30px; height: 34px; cursor: pointer; font-size: 15px; flex-shrink: 0; }
+
+  .flashcard {
+    border: 1px solid var(--line-strong); border-radius: 10px; padding: 34px 24px; background: var(--paper);
+    text-align: center; margin: 10px 0 18px; min-height: 170px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  }
+  .flashcard .cat-tag { font-size: 12px; color: var(--muted); }
+  .flashcard .front { font-size: 42px; font-weight: 700; font-family: 'Noto Serif JP', serif; line-height: 1.4; letter-spacing: 0.04em; }
+  .flashcard .back { text-align: left; width: 100%; margin-top: 12px; border-top: 1px dashed var(--line-strong); padding-top: 14px; }
+  .flashcard .back .row { margin-bottom: 8px; font-size: 15px; line-height: 1.6; }
+  .flashcard .back .row b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .review-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
+  .review-actions button.forgot { background: var(--hanko); color: #fff; border: none; }
+  .review-actions button.remembered { background: var(--jade); color: #fff; border: none; }
+  .review-actions button { padding: 10px 22px; border-radius: 6px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .review-done { text-align: center; padding: 40px 10px; color: var(--muted); }
+  .review-done .review-actions { margin-top: 16px; }
+
+  form.entry { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px dashed var(--line-strong); }
+  form.entry .full { grid-column: 1 / -1; }
+  form.entry label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  form.entry input, form.entry textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: 15px; font-family: inherit; }
+  form.entry textarea { resize: vertical; min-height: 44px; }
+  form.entry .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  .genko-wrap { display: flex; align-items: center; gap: 10px; }
+  .genko-cell { width: 64px; height: 64px; border: 1.5px solid var(--line-strong); display: flex; align-items: center; justify-content: center; position: relative; background: var(--paper); }
+  .genko-cell::before, .genko-cell::after { content: ''; position: absolute; background: var(--line); opacity: 0.5; }
+  .genko-cell::before { width: 100%; height: 1px; top: 50%; left: 0; }
+  .genko-cell::after { height: 100%; width: 1px; left: 50%; top: 0; }
+  .genko-cell input { width: 100%; height: 100%; border: none; background: transparent; text-align: center; font-family: 'Noto Serif JP', serif; font-size: 34px; color: var(--ink); position: relative; z-index: 1; }
+  .genko-cell input:focus { outline: 2px solid var(--jade); outline-offset: 2px; }
+
+  .item-list { display: flex; flex-direction: column; gap: 8px; }
+  .item-row { border: 1px solid var(--line); border-radius: 7px; padding: 12px 14px; background: var(--paper); display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
+  .item-row .main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; letter-spacing: 0.02em; }
+  .item-row .reading { color: var(--muted); font-size: 14px; }
+  .item-row .meaning { color: var(--ink); font-size: 14px; }
+  .item-row .meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+  .box-chip { display: inline-block; padding: 2px 7px; border-radius: 8px; background: var(--jade-dim); color: var(--jade); font-weight: 700; font-size: 11px; }
+  .due-chip { background: var(--hanko); color: #fff; padding: 2px 7px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+  .created-chip { color: var(--muted); font-size: 11px; }
+  .item-detail { border: 1px solid var(--line-strong); border-radius: 7px; padding: 14px 16px; background: var(--paper2); margin-top: -4px; margin-bottom: 8px; }
+  .item-detail .row { font-size: 14px; margin-bottom: 7px; line-height: 1.6; }
+  .item-detail .row b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .item-detail .detail-actions { margin-top: 10px; display: flex; gap: 14px; }
+
+  .word-mini-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .word-mini-row { display: flex; gap: 6px; align-items: center; }
+  .word-mini-row input { flex: 1; padding: 7px 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); min-width: 0; }
+
+  .empty-note { color: var(--muted); font-size: 13.5px; padding: 20px 0; text-align: center; }
+
+  /* Login screen */
+  .login-card { background: var(--paper-card); border: 1px solid var(--line); border-radius: 10px; padding: 28px 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+  .login-card h1 { font-size: 22px; margin: 0 0 4px; }
+  .login-card p.sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .login-card label { font-size: 12px; color: var(--muted); display: block; margin: 12px 0 4px; }
+  .login-card input { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 14px; }
+  .login-card .login-actions { display: flex; gap: 8px; margin-top: 18px; }
+  .login-card .login-actions button { flex: 1; }
+  .login-error { color: var(--hanko); font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
+
+  @media (max-width: 560px) {
+    form.entry { grid-template-columns: 1fr; }
+    header.top h1 { font-size: 21px; }
+    .flashcard .front { font-size: 34px; }
+    .word-mini-row { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <h1 class="serif">일본어 학습 노트</h1>
+    <p class="sub">로그인하면 어느 기기에서든 같은 내용을 볼 수 있어요.</p>
+    <label for="login-email">이메일</label>
+    <input type="email" id="login-email" autocomplete="email">
+    <label for="login-password">비밀번호</label>
+    <input type="password" id="login-password" autocomplete="current-password">
+    <div class="login-actions">
+      <button class="secondary" id="signup-btn" type="button">회원가입</button>
+      <button class="primary" id="login-btn" type="button">로그인</button>
+    </div>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header class="top">
+    <div class="title-row">
+      <h1>일본어 학습 노트</h1>
+      <span class="stamp">帳</span>
+    </div>
+    <p class="sub">단어 · 한자 · 문법 · 표현 — 매일 쓰고, 때 되면 다시 꺼내보기</p>
+    <span class="sync-badge" id="sync-badge" title="Firebase Firestore에 실시간으로 저장돼요.">☁️ 동기화됨</span>
+    <div class="logout-row"><button class="ghost" id="logout-btn">로그아웃</button></div>
+    <div class="theme-row" id="theme-row"></div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+
+  <section class="panel" id="panel-review"></section>
+  <section class="panel hidden" id="panel-vocab"></section>
+  <section class="panel hidden" id="panel-kanji"></section>
+  <section class="panel hidden" id="panel-grammar"></section>
+  <section class="panel hidden" id="panel-expr"></section>
+</div>
+
+<script>
+// =====================================================================
+// 1) Firebase 설정 — Firebase 콘솔 > 프로젝트 설정 > 일반 탭에서
+//    "SDK 설정 및 구성" 값을 그대로 복사해서 아래에 붙여넣으세요.
+//    Firestore와 Authentication(이메일/비밀번호 로그인)을 미리 켜두어야 해요.
+// =====================================================================
+const firebaseConfig = {
+ apiKey: "AIzaSyBbtuPu1kHmM7qcFdVbP5OJ1hj-nY0kVLU",
+    authDomain: "japanese-5d397.firebaseapp.com",
+    projectId: "japanese-5d397",
+    storageBucket: "japanese-5d397.firebasestorage.app",
+    messagingSenderId: "1028736284181",
+    appId: "1:1028736284181:web:72d63fadeacfadc528001c"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const firestore = firebase.firestore();
+
+// 로그인 상태를 이 브라우저에 계속 저장해서, 창을 닫았다 다시 열어도
+// 로그아웃을 누르기 전까지는 로그인 화면이 다시 뜨지 않도록 함.
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
+  console.error('로그인 유지 설정 실패', e);
+});
+
+(function(){
+  "use strict";
+
+  var THEME_KEY = 'jp_study_theme_v1';
+  var INTERVALS = [1, 2, 4, 7, 14, 30, 60];
+
+  var CATS = {
+    vocab:   { label: '단어', color:'cat-vocab' },
+    kanji:   { label: '한자', color:'cat-kanji' },
+    grammar: { label: '문법', color:'cat-grammar' },
+    expr:    { label: '표현', color:'cat-expr' }
+  };
+  var TAB_ORDER = ['review','vocab','kanji','grammar','expr'];
+
+  var THEMES = [
+    { key:'light',  label:'라이트', dot:'#FFFFFF' },
+    { key:'dark',   label:'다크',   dot:'#1E1B17' },
+    { key:'blue',   label:'블루',   dot:'#3D6FA6' },
+    { key:'green',  label:'그린',   dot:'#4C8B63' },
+    { key:'red',    label:'레드',   dot:'#B5453B' },
+    { key:'yellow', label:'옐로우', dot:'#D9A73B' },
+    { key:'purple', label:'퍼플',   dot:'#8B5FB0' }
+  ];
+
+  var FIELD_DEFS = {
+    vocab: [
+      { key:'word', label:'단어', type:'text' },
+      { key:'reading', label:'읽기', type:'text' },
+      { key:'meaning', label:'뜻', type:'text' },
+      { key:'example', label:'예문', type:'textarea', full:true },
+      { key:'note', label:'비고', type:'text' },
+      { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
+    ],
+    kanji: [
+      { key:'kanji', label:'한자', type:'kanji' },
+      { key:'onyomi', label:'음독', type:'text' },
+      { key:'kunyomi', label:'훈독', type:'text' },
+      { key:'meaning', label:'뜻', type:'text' },
+      { key:'example', label:'대표 단어', type:'text' },
+      { key:'note', label:'비고', type:'text', full:true }
+    ],
+    grammar: [
+      { key:'pattern', label:'문형', type:'text' },
+      { key:'conjugation', label:'접속 형태', type:'text' },
+      { key:'meaning', label:'의미', type:'textarea', full:true },
+      { key:'note', label:'비고', type:'text', full:true },
+      { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
+    ],
+    expr: [
+      { key:'expr', label:'표현', type:'text' },
+      { key:'meaning', label:'의미', type:'text' },
+      { key:'example', label:'예문', type:'textarea', full:true },
+      { key:'note', label:'비고', type:'text' },
+      { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
+    ]
+  };
+  var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
+  var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
+  var ADD_LABEL = { vocab:'단어 추가', kanji:'한자 추가', grammar:'문법 추가', expr:'표현 추가' };
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function addDays(dateStr, n){
+    var d = new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function shortDate(dateStr){ return dateStr ? dateStr.slice(5) : ''; }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function esc(s){
+    return (s==null?'':String(s)).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function emptyData(){ return { vocab: [], kanji: [], grammar: [], expr: [] }; }
+  var data = emptyData();
+
+  // ---------- Firestore layer ----------
+  // Layout: users/{uid}/categories/{vocab|kanji|grammar|expr}  ->  { items: [...] }
+  //         users/{uid}/categories/settings                    ->  { theme: "..." }
+  var fsUid = null;
+  var catRefs = {};
+  var settingsRef = null;
+  var unsubscribers = [];
+
+  function catCollection(userId){ return firestore.collection('users').doc(userId).collection('categories'); }
+
+  function attachFirestore(userId){
+    fsUid = userId;
+    var coll = catCollection(userId);
+    Object.keys(CATS).forEach(function(cat){
+      var ref = coll.doc(cat);
+      catRefs[cat] = ref;
+      var unsub = ref.onSnapshot(function(snap){
+        var d = snap.exists ? snap.data() : null;
+        data[cat] = (d && Array.isArray(d.items)) ? d.items : [];
+        renderAll();
+      }, function(err){ console.error('snapshot error', cat, err); setSyncBadge('error'); });
+      unsubscribers.push(unsub);
+    });
+    settingsRef = coll.doc('settings');
+    var unsubSettings = settingsRef.onSnapshot(function(snap){
+      if (snap.exists && snap.data().theme && snap.data().theme !== state.theme){
+        applyTheme(snap.data().theme, false);
+      }
+    }, function(err){ console.error('settings snapshot error', err); });
+    unsubscribers.push(unsubSettings);
+    setSyncBadge('synced');
+  }
+  function detachFirestore(){
+    unsubscribers.forEach(function(u){ u(); });
+    unsubscribers = [];
+    catRefs = {};
+    settingsRef = null;
+    fsUid = null;
+    data = emptyData();
+  }
+  function pushCategory(cat){
+    if (!catRefs[cat]) return;
+    catRefs[cat].set({ items: data[cat] }).catch(function(e){
+      console.error('save failed', cat, e);
+      setSyncBadge('error');
+    });
+  }
+  function setSyncBadge(status){
+    var el = document.getElementById('sync-badge');
+    if (!el) return;
+    var map = {
+      synced: { text: '☁️ 동기화됨', title: 'Firestore에 실시간으로 저장돼요. 다른 기기에서 같은 계정으로 로그인하면 그대로 보여요.' },
+      error: { text: '⚠️ 저장 오류 (연결 확인 필요)', title: 'Firestore 저장에 실패했어요. 콘솔의 오류 메시지와 보안 규칙을 확인해보세요.' }
+    };
+    var m = map[status] || { text: '', title: '' };
+    el.textContent = m.text;
+    el.title = m.title;
+  }
+
+  function addItem(cat, fields){
+    var item = Object.assign({ id: uid(), created: todayStr(), box: 0, next: todayStr() }, fields);
+    data[cat].push(item);
+    pushCategory(cat);
+    renderAll();
+  }
+  function updateItem(cat, id, fields){
+    var it = data[cat].find(function(x){ return x.id === id; });
+    if (!it) return;
+    Object.assign(it, fields);
+    pushCategory(cat);
+    renderAll();
+  }
+  function deleteItem(cat, id){
+    data[cat] = data[cat].filter(function(it){ return it.id !== id; });
+    pushCategory(cat);
+    renderAll();
+  }
+  function dueItems(cat){
+    var t = todayStr();
+    return data[cat].filter(function(it){ return it.next <= t; });
+  }
+  function dueCount(cat){ return dueItems(cat).length; }
+  function totalDue(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + dueCount(c); }, 0); }
+  function totalAll(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + data[c].length; }, 0); }
+  function reviewResult(cat, id, remembered){
+    var it = data[cat].find(function(x){ return x.id === id; });
+    if (!it) return;
+    it.box = remembered ? Math.min(it.box + 1, INTERVALS.length - 1) : 0;
+    it.next = addDays(todayStr(), INTERVALS[it.box]);
+    pushCategory(cat);
+  }
+
+  // ---------- Theme ----------
+  var state = { activeTab: 'review', reviewQueue: null, reviewIdx: 0, reviewFlipped: false, openDetail: {}, editMode: {}, theme: 'light' };
+
+  function initialTheme(){
+    var saved = null;
+    try { saved = localStorage.getItem(THEME_KEY); } catch(e){}
+    if (saved) return saved;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  function applyTheme(theme, alsoPush){
+    document.documentElement.setAttribute('data-theme', theme);
+    state.theme = theme;
+    try { localStorage.setItem(THEME_KEY, theme); } catch(e){}
+    if (alsoPush !== false && settingsRef){ settingsRef.set({ theme: theme }, { merge: true }).catch(function(){}); }
+    renderThemeRow();
+  }
+  function renderThemeRow(){
+    var wrap = document.getElementById('theme-row');
+    if (!wrap) return;
+    var html = THEMES.map(function(t){
+      return '<button class="theme-dot'+(state.theme===t.key?' active':'')+'" style="background:'+t.dot+'" data-theme-btn="'+t.key+'" title="'+esc(t.label)+'" aria-label="'+esc(t.label)+'"></button>';
+    }).join('');
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('[data-theme-btn]').forEach(function(btn){
+      btn.addEventListener('click', function(){ applyTheme(btn.getAttribute('data-theme-btn'), true); });
+    });
+  }
+
+  // ---------- Tabs ----------
+  function renderTabs(){
+    var nav = document.getElementById('tabs');
+    nav.innerHTML = '';
+    TAB_ORDER.forEach(function(key){
+      var btn = document.createElement('button');
+      btn.className = 'tab-btn' + (state.activeTab === key ? ' active' : '');
+      var label = key === 'review' ? '오늘의 복습' : CATS[key].label;
+      var due = key === 'review' ? totalDue() : dueCount(key);
+      btn.innerHTML = esc(label) + (due > 0 ? ' <span class="badge">'+due+'</span>' : '');
+      btn.addEventListener('click', function(){
+        state.activeTab = key;
+        if (key === 'review'){ state.reviewQueue = null; state.reviewIdx = 0; state.reviewFlipped = false; }
+        renderAll();
+      });
+      nav.appendChild(btn);
+    });
+  }
+  function switchPanel(){
+    TAB_ORDER.forEach(function(key){
+      var p = document.getElementById('panel-' + key);
+      if (p) p.classList.toggle('hidden', state.activeTab !== key);
+    });
+  }
+
+  // ---------- Review ----------
+  function buildQueue(all){
+    var q = [];
+    Object.keys(CATS).forEach(function(c){
+      var pool = all ? data[c] : dueItems(c);
+      pool.forEach(function(it){ q.push({ cat: c, item: it }); });
+    });
+    for (var i = q.length - 1; i > 0; i--){ var j = Math.floor(Math.random()*(i+1)); var tmp=q[i]; q[i]=q[j]; q[j]=tmp; }
+    return q;
+  }
+  function startReview(all){
+    state.reviewQueue = buildQueue(all);
+    state.reviewIdx = 0;
+    state.reviewFlipped = false;
+    renderReview();
+  }
+  function backRowsFor(cat, it){
+    var rows;
+    if (cat === 'vocab') rows = [['읽기', it.reading], ['뜻', it.meaning], ['예문', it.example], ['비고', it.note], ['나만의 문장', it.mySentence]];
+    else if (cat === 'kanji') rows = [['음독', it.onyomi], ['훈독', it.kunyomi], ['뜻', it.meaning], ['대표 단어', it.example], ['비고', it.note]];
+    else if (cat === 'grammar') rows = [['의미', it.meaning], ['접속 형태', it.conjugation], ['비고', it.note], ['나만의 문장', it.mySentence]];
+    else {
+      rows = [['의미', it.meaning], ['예문', it.example], ['비고', it.note], ['나만의 문장', it.mySentence]];
+      if (it.unknownWords && it.unknownWords.length){
+        rows.push(['모르는 단어', it.unknownWords.map(function(w){
+          var parts = [w.word]; if (w.reading) parts.push('('+w.reading+')'); if (w.meaning) parts.push('— '+w.meaning);
+          return parts.join(' ');
+        }).join(', ')]);
+      }
+    }
+    return rows.filter(function(r){ return r[1] && String(r[1]).trim(); });
+  }
+
+  function renderReview(){
+    var panel = document.getElementById('panel-review');
+    if (!panel) return;
+    if (!state.reviewQueue){
+      var summaryHtml = Object.keys(CATS).map(function(c){
+        return '<div class="review-card"><div class="n '+CATS[c].color+'">'+dueCount(c)+'</div><div class="label">'+CATS[c].label+' 복습</div></div>';
+      }).join('');
+      var due = totalDue(), all = totalAll();
+      var buttons = '';
+      if (due > 0) buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+due+'개)</button>';
+      if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
+      panel.innerHTML = '<div class="review-summary">'+summaryHtml+'</div>' +
+        (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>');
+      var dueBtn = document.getElementById('start-due');
+      if (dueBtn) dueBtn.addEventListener('click', function(){ startReview(false); });
+      var allBtn = document.getElementById('start-all');
+      if (allBtn) allBtn.addEventListener('click', function(){ startReview(true); });
+      return;
+    }
+    if (state.reviewIdx >= state.reviewQueue.length){
+      var remainingAll = totalAll();
+      panel.innerHTML = '<div class="review-done"><h3 class="serif">복습 끝!</h3><p>수고하셨어요.</p>' +
+        '<div class="review-actions">' +
+        (remainingAll > 0 ? '<button class="secondary" id="continue-all">전체 항목으로 이어서 복습</button>' : '') +
+        '<button class="secondary" id="back-summary">돌아가기</button>' +
+        '</div></div>';
+      var contBtn = document.getElementById('continue-all');
+      if (contBtn) contBtn.addEventListener('click', function(){ startReview(true); });
+      document.getElementById('back-summary').addEventListener('click', function(){ state.reviewQueue = null; renderReview(); renderTabs(); });
+      return;
+    }
+    var cur = state.reviewQueue[state.reviewIdx];
+    var cat = cur.cat, it = cur.item;
+    var front = it[TITLE_KEY[cat]] || '';
+    var backRows = backRowsFor(cat, it);
+    var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
+
+    var html = '<div style="text-align:right;color:var(--muted);font-size:13px;margin-bottom:6px;">'+progress+'</div>';
+    html += '<div class="flashcard"><div class="cat-tag '+CATS[cat].color+'">'+CATS[cat].label+'</div><div class="front">'+esc(front)+'</div>';
+    if (state.reviewFlipped){
+      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>'; }).join('') + '</div>';
+    }
+    html += '</div>';
+    html += !state.reviewFlipped
+      ? '<div class="review-actions"><button class="primary" id="flip-btn">답 보기</button></div>'
+      : '<div class="review-actions"><button class="forgot" id="forgot-btn">까먹었어요</button><button class="remembered" id="remember-btn">기억나요</button></div>';
+    panel.innerHTML = html;
+
+    var flipBtn = document.getElementById('flip-btn');
+    if (flipBtn) flipBtn.addEventListener('click', function(){ state.reviewFlipped = true; renderReview(); });
+    function advance(remembered){ reviewResult(cat, it.id, remembered); state.reviewIdx += 1; state.reviewFlipped = false; renderReview(); }
+    var forgotBtn = document.getElementById('forgot-btn');
+    if (forgotBtn) forgotBtn.addEventListener('click', function(){ advance(false); });
+    var rememberBtn = document.getElementById('remember-btn');
+    if (rememberBtn) rememberBtn.addEventListener('click', function(){ advance(true); });
+  }
+
+  // ---------- Field form generation (shared by add & edit) ----------
+  function fieldRowHtml(prefix, field, value){
+    var id = prefix + '-' + field.key;
+    var fullClass = field.full ? ' full' : '';
+    if (field.type === 'kanji'){
+      return '<div class="'+fullClass+'"><label for="'+id+'">'+esc(field.label)+'</label>' +
+        '<div class="genko-wrap"><div class="genko-cell"><input id="'+id+'" maxlength="4" value="'+esc(value)+'"></div></div></div>';
+    }
+    var tag = field.type === 'textarea' ? 'textarea' : 'input';
+    var inner = field.type === 'textarea' ? esc(value) : '';
+    var valueAttr = field.type === 'textarea' ? '' : ' value="'+esc(value)+'"';
+    return '<div class="'+fullClass.trim()+'"><label for="'+id+'">'+esc(field.label)+'</label>' +
+      '<'+tag+' id="'+id+'"'+(field.type==='textarea'?'':' type="text"')+valueAttr+'>'+inner+'</'+tag+'>' +
+      '</div>';
+  }
+  function generateFormFields(cat, prefix, existing){
+    return FIELD_DEFS[cat].map(function(f){ return fieldRowHtml(prefix, f, existing ? existing[f.key] : ''); }).join('');
+  }
+  function readFormFields(cat, prefix){
+    var out = {};
+    FIELD_DEFS[cat].forEach(function(f){
+      var el = document.getElementById(prefix + '-' + f.key);
+      out[f.key] = el ? el.value.trim() : '';
+    });
+    return out;
+  }
+  function renderUnknownWordsEditor(containerId, rowsArr){
+    var wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    wrap.innerHTML = rowsArr.map(function(_, i){
+      return '<div class="word-mini-row">' +
+        '<input placeholder="단어" data-i="'+i+'" data-f="word" class="uw-input" value="'+esc(rowsArr[i].word)+'">' +
+        '<input placeholder="발음" data-i="'+i+'" data-f="reading" class="uw-input" value="'+esc(rowsArr[i].reading)+'">' +
+        '<input placeholder="뜻" data-i="'+i+'" data-f="meaning" class="uw-input" value="'+esc(rowsArr[i].meaning)+'">' +
+        '<button type="button" class="icon-x" data-remove="'+i+'">×</button>' +
+        '</div>';
+    }).join('');
+    wrap.querySelectorAll('.uw-input').forEach(function(inp){
+      inp.addEventListener('input', function(){
+        var i = +inp.getAttribute('data-i'), f = inp.getAttribute('data-f');
+        rowsArr[i][f] = inp.value;
+      });
+    });
+    wrap.querySelectorAll('[data-remove]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        rowsArr.splice(+btn.getAttribute('data-remove'), 1);
+        renderUnknownWordsEditor(containerId, rowsArr);
+      });
+    });
+  }
+
+  // ---------- Category panels ----------
+  function renderCategoryPanel(cat){
+    var panel = document.getElementById('panel-' + cat);
+    var prefix = 'add-' + cat;
+    var isExpr = cat === 'expr';
+    var unknownRows = [];
+
+    var formHtml = '<form class="entry" id="'+cat+'-form">' + generateFormFields(cat, prefix, null);
+    if (isExpr){
+      formHtml += '<div class="full"><label>표현 중 모르는 단어</label>' +
+        '<div class="word-mini-list" id="'+prefix+'-unknown-list"></div>' +
+        '<button type="button" class="ghost" id="'+prefix+'-add-word">+ 단어 추가</button></div>';
+    }
+    formHtml += '<div class="actions"><button type="submit" class="primary">'+ADD_LABEL[cat]+'</button></div></form>';
+
+    panel.innerHTML = formHtml + renderList(cat);
+    bindListEvents(cat);
+
+    if (isExpr){
+      renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+      document.getElementById(prefix + '-add-word').addEventListener('click', function(){
+        unknownRows.push({ word:'', reading:'', meaning:'' });
+        renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+      });
+    }
+
+    document.getElementById(cat + '-form').addEventListener('submit', function(e){
+      e.preventDefault();
+      var fields = readFormFields(cat, prefix);
+      if (!fields[TITLE_KEY[cat]]) return;
+      if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
+      addItem(cat, fields);
+    });
+  }
+
+  function boxDisplay(it){ return '<span class="box-chip">Lv.'+ (it.box+1) +'</span>'; }
+
+  function renderList(cat){
+    var items = data[cat].slice().sort(function(a,b){ return a.next < b.next ? -1 : 1; });
+    if (!items.length) return '<div class="empty-note">아직 추가된 '+CATS[cat].label+' 항목이 없어요.</div>';
+    var t = todayStr();
+    var rows = items.map(function(it){
+      var isDue = it.next <= t;
+      var titleField = it[TITLE_KEY[cat]];
+      var subField = SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
+      var isEditing = !!state.editMode[it.id];
+      var body = isEditing ? renderEditForm(cat, it) : renderDetail(cat, it);
+      var openClass = (state.openDetail[it.id] || isEditing) ? '' : ' hidden';
+
+      return '<div>' +
+        '<div class="item-row" data-toggle="'+it.id+'">' +
+          '<div class="main"><span class="word">'+esc(titleField||'')+'</span>' +
+            (subField ? '<span class="reading">'+esc(subField)+'</span>' : '') +
+            '<span class="meaning">'+esc(it.meaning||'')+'</span></div>' +
+          '<div class="meta">' + boxDisplay(it) +
+            '<span class="created-chip">등록 '+shortDate(it.created)+'</span>' +
+            (isDue ? '<span class="due-chip">복습 대기</span>' : '<span>다음 '+shortDate(it.next)+'</span>') +
+          '</div>' +
+        '</div>' +
+        '<div class="item-detail'+openClass+'" id="detail-'+it.id+'">'+body+'</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="item-list">' + rows + '</div>';
+  }
+
+  function renderDetail(cat, it){
+    var rows = [['등록일', it.created]].concat(backRowsForDetail(cat, it));
+    var html = rows.filter(function(r){ return r[1]; }).map(function(r){
+      return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>';
+    }).join('');
+    html += '<div class="detail-actions">' +
+      '<button class="ghost" data-edit="'+it.id+'" data-cat="'+cat+'">수정</button>' +
+      '<button class="ghost" data-del="'+it.id+'" data-cat="'+cat+'">삭제</button>' +
+      '</div>';
+    return html;
+  }
+  function backRowsForDetail(cat, it){
+    var rows;
+    if (cat === 'vocab') rows = [['읽기',it.reading],['뜻',it.meaning],['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
+    else if (cat === 'kanji') rows = [['음독',it.onyomi],['훈독',it.kunyomi],['뜻',it.meaning],['대표 단어',it.example],['비고',it.note]];
+    else if (cat === 'grammar') rows = [['접속 형태',it.conjugation],['의미',it.meaning],['비고',it.note],['나만의 문장',it.mySentence]];
+    else rows = [['의미',it.meaning],['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
+    if (cat === 'expr' && it.unknownWords && it.unknownWords.length){
+      rows.push(['모르는 단어', it.unknownWords.map(function(w){
+        var parts = [w.word]; if (w.reading) parts.push('('+w.reading+')'); if (w.meaning) parts.push('— '+w.meaning);
+        return parts.join(' ');
+      }).join(', ')]);
+    }
+    return rows;
+  }
+
+  function renderEditForm(cat, it){
+    var prefix = 'edit-' + it.id;
+    var isExpr = cat === 'expr';
+    var unknownRows = isExpr ? (it.unknownWords || []).map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; }) : [];
+    var html = '<form class="entry" id="'+prefix+'-form" style="margin-bottom:0;padding-bottom:6px;border-bottom:none;">' + generateFormFields(cat, prefix, it);
+    if (isExpr){
+      html += '<div class="full"><label>표현 중 모르는 단어</label>' +
+        '<div class="word-mini-list" id="'+prefix+'-unknown-list"></div>' +
+        '<button type="button" class="ghost" id="'+prefix+'-add-word">+ 단어 추가</button></div>';
+    }
+    html += '<div class="actions"><button type="button" class="secondary" id="'+prefix+'-cancel">취소</button><button type="submit" class="primary">저장</button></div></form>';
+
+    setTimeout(function(){
+      if (isExpr){
+        renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+        var addBtn = document.getElementById(prefix + '-add-word');
+        if (addBtn) addBtn.addEventListener('click', function(){
+          unknownRows.push({ word:'', reading:'', meaning:'' });
+          renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+        });
+      }
+      var cancelBtn = document.getElementById(prefix + '-cancel');
+      if (cancelBtn) cancelBtn.addEventListener('click', function(){ state.editMode[it.id] = false; renderAll(); });
+      var form = document.getElementById(prefix + '-form');
+      if (form) form.addEventListener('submit', function(e){
+        e.preventDefault();
+        var fields = readFormFields(cat, prefix);
+        if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
+        updateItem(cat, it.id, fields);
+        state.editMode[it.id] = false;
+      });
+    }, 0);
+
+    return html;
+  }
+
+  function bindListEvents(cat){
+    var panel = document.getElementById('panel-' + cat);
+    panel.querySelectorAll('[data-toggle]').forEach(function(row){
+      row.addEventListener('click', function(){
+        var id = row.getAttribute('data-toggle');
+        if (state.editMode[id]) return;
+        state.openDetail[id] = !state.openDetail[id];
+        var detail = document.getElementById('detail-' + id);
+        if (detail) detail.classList.toggle('hidden', !state.openDetail[id]);
+      });
+    });
+    panel.querySelectorAll('[data-del]').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var id = btn.getAttribute('data-del'), c = btn.getAttribute('data-cat');
+        if (confirm('이 항목을 삭제할까요?')){ deleteItem(c, id); }
+      });
+    });
+    panel.querySelectorAll('[data-edit]').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var id = btn.getAttribute('data-edit');
+        state.editMode[id] = true;
+        state.openDetail[id] = true;
+        renderAll();
+      });
+    });
+  }
+
+  function renderAll(){
+    renderThemeRow();
+    renderTabs();
+    switchPanel();
+    if (state.activeTab === 'review') renderReview();
+    else renderCategoryPanel(state.activeTab);
+  }
+
+  // ---------- Auth wiring ----------
+  function showApp(){
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  }
+  function showLogin(){
+    document.getElementById('login-screen').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+  }
+  function setLoginError(msg){ document.getElementById('login-error').textContent = msg || ''; }
+
+  document.getElementById('login-btn').addEventListener('click', function(){
+    var email = document.getElementById('login-email').value.trim();
+    var pw = document.getElementById('login-password').value;
+    setLoginError('');
+    auth.signInWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
+  });
+  document.getElementById('signup-btn').addEventListener('click', function(){
+    var email = document.getElementById('login-email').value.trim();
+    var pw = document.getElementById('login-password').value;
+    setLoginError('');
+    auth.createUserWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
+  });
+  document.getElementById('logout-btn').addEventListener('click', function(){
+    auth.signOut();
+  });
+
+  auth.onAuthStateChanged(function(user){
+    detachFirestore();
+    if (user){
+      document.documentElement.setAttribute('data-theme', initialTheme());
+      state.theme = document.documentElement.getAttribute('data-theme');
+      state.activeTab = 'review'; state.reviewQueue = null; state.reviewIdx = 0; state.reviewFlipped = false;
+      state.openDetail = {}; state.editMode = {};
+      showApp();
+      renderAll();
+      attachFirestore(user.uid);
+    } else {
+      showLogin();
+    }
+  });
+})();
+</script>
+</body>
+</html>
