@@ -478,17 +478,18 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
 
   // ---------- Review ----------
-  function buildQueue(all){
+  function buildQueue(all, onlyCat){
     var q = [];
     Object.keys(CATS).forEach(function(c){
+      if (onlyCat && c !== onlyCat) return;
       var pool = all ? data[c] : dueItems(c);
       pool.forEach(function(it){ q.push({ cat: c, item: it }); });
     });
     for (var i = q.length - 1; i > 0; i--){ var j = Math.floor(Math.random()*(i+1)); var tmp=q[i]; q[i]=q[j]; q[j]=tmp; }
     return q;
   }
-  function startReview(all){
-    state.reviewQueue = buildQueue(all);
+  function startReview(all, onlyCat){
+    state.reviewQueue = buildQueue(all, onlyCat);
     state.reviewIdx = 0;
     state.reviewFlipped = false;
     renderReview();
@@ -521,12 +522,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var buttons = '';
       if (due > 0) buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+due+'개)</button>';
       if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
+      var catButtons = Object.keys(CATS).map(function(c){
+        var n = data[c].length;
+        if (!n) return '';
+        return '<button class="secondary" data-cat-review="'+c+'">'+CATS[c].label+' 전체 복습 ('+n+'개)</button>';
+      }).join('');
       panel.innerHTML = '<div class="review-summary">'+summaryHtml+'</div>' +
-        (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>');
+        (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
+        (catButtons ? '<div class="review-start-row" style="margin-top:10px;">'+catButtons+'</div>' : '');
       var dueBtn = document.getElementById('start-due');
       if (dueBtn) dueBtn.addEventListener('click', function(){ startReview(false); });
       var allBtn = document.getElementById('start-all');
       if (allBtn) allBtn.addEventListener('click', function(){ startReview(true); });
+      panel.querySelectorAll('[data-cat-review]').forEach(function(btn){
+        btn.addEventListener('click', function(){ startReview(true, btn.getAttribute('data-cat-review')); });
+      });
       return;
     }
     if (state.reviewIdx >= state.reviewQueue.length){
