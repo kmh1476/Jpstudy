@@ -8,10 +8,10 @@
 // 이 파일 옆에 덮어쓰면 앱 기능이 업데이트돼요.
 // =====================================================================
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+ apiKey: "AIzaSyBbtuPu1kHmM7qcFdVbP5OJ1hj-nY0kVLU",
+    authDomain: "japanese-5d397.firebaseapp.com",
+    projectId: "japanese-5d397",
+    storageBucket: "japanese-5d397.firebasestorage.app",
+    messagingSenderId: "1028736284181",
+    appId: "1:1028736284181:web:72d63fadeacfadc528001c"
 };
