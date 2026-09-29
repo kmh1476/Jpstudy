@@ -12,6 +12,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- 딱 한 번만 채워두는 설정 파일 — 이 index.html을 새로 받아도 절대 건드릴 필요 없음 -->
+<script src="firebase-config.js"></script>
 
 <style>
   :root {
@@ -106,6 +108,16 @@
   .review-card .n { font-size: 24px; font-weight: 700; font-family: 'Noto Serif JP', serif; }
   .review-card .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .review-start-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .cat-review-block { margin-top: 14px; }
+  .cat-review-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .cat-review-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cat-review-chip {
+    font-size: 13px; padding: 6px 14px; border-radius: 16px; border: 1.5px solid currentColor;
+    background: var(--paper); cursor: pointer; font-family: 'Noto Serif JP', serif; font-weight: 500;
+  }
+  .cat-review-chip span { font-family: 'Noto Sans KR', sans-serif; opacity: 0.75; margin-left: 4px; }
+  .cat-review-chip:hover { filter: brightness(0.97); }
 
   .cat-vocab { color: var(--hanko); } .cat-kanji { color: var(--jade); }
   .cat-grammar { color: var(--indigo); } .cat-expr { color: var(--purple-acc); }
@@ -261,20 +273,7 @@
 </div>
 
 <script>
-// =====================================================================
-// 1) Firebase 설정 — Firebase 콘솔 > 프로젝트 설정 > 일반 탭에서
-//    "SDK 설정 및 구성" 값을 그대로 복사해서 아래에 붙여넣으세요.
-//    Firestore와 Authentication(이메일/비밀번호 로그인)을 미리 켜두어야 해요.
-// =====================================================================
-const firebaseConfig = {
- apiKey: "AIzaSyBbtuPu1kHmM7qcFdVbP5OJ1hj-nY0kVLU",
-    authDomain: "japanese-5d397.firebaseapp.com",
-    projectId: "japanese-5d397",
-    storageBucket: "japanese-5d397.firebasestorage.app",
-    messagingSenderId: "1028736284181",
-    appId: "1:1028736284181:web:72d63fadeacfadc528001c"
-};
-
+// firebaseConfig는 firebase-config.js에서 옵니다 (이 파일 자체는 수정할 필요 없어요).
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const firestore = firebase.firestore();
@@ -497,7 +496,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     kanaFilter: { vocab:null, kanji:null, grammar:null, expr:null },
     page: { vocab:1, kanji:1, grammar:1, expr:1 },
     streak: { count: 0, lastDate: null },
-    reviewDirection: 'normal'
+    reviewDirection: 'mixed'
   };
 
   function initialTheme(){
@@ -576,26 +575,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
     return shuffle(q);
   }
-  function buildClozeQueue(){
-    var q = [];
-    ['vocab','expr'].forEach(function(cat){
-      data[cat].forEach(function(it){
-        var term = it[TITLE_KEY[cat]];
-        if (term && it.example && it.example.indexOf(term) !== -1){
-          q.push({ cat: cat, item: it, mode: 'cloze' });
-        }
-      });
-    });
-    return shuffle(q);
-  }
   function startReview(mode, onlyCat){
     state.reviewQueue = buildQueue(mode, onlyCat);
-    state.reviewIdx = 0;
-    state.reviewFlipped = false;
-    renderReview();
-  }
-  function startClozeReview(){
-    state.reviewQueue = buildClozeQueue();
     state.reviewIdx = 0;
     state.reviewFlipped = false;
     renderReview();
@@ -652,23 +633,22 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var summaryHtml = Object.keys(CATS).map(function(c){
         return '<div class="review-card"><div class="n '+CATS[c].color+'">'+dueCount(c)+'</div><div class="label">'+CATS[c].label+' 복습</div></div>';
       }).join('');
-      var due = totalDue(), all = totalAll(), weak = totalWeak(), cloze = buildClozeQueue().length;
+      var due = totalDue(), all = totalAll(), weak = totalWeak();
       var buttons = '';
       if (due > 0) buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+due+'개)</button>';
       if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
-      var catButtons = Object.keys(CATS).map(function(c){
+      var catChips = Object.keys(CATS).map(function(c){
         var n = data[c].length;
         if (!n) return '';
-        return '<button class="secondary" data-cat-review="'+c+'">'+CATS[c].label+' 전체 복습 ('+n+'개)</button>';
+        return '<button class="cat-review-chip '+CATS[c].color+'" data-cat-review="'+c+'">'+CATS[c].label+' <span>'+n+'</span></button>';
       }).join('');
       var extraButtons = '';
       if (weak > 0) extraButtons += '<button class="secondary" id="start-weak">⚠️ 취약 항목만 복습 ('+weak+'개)</button>';
-      if (cloze > 0) extraButtons += '<button class="secondary" id="start-cloze">✏️ 예문 빈칸 채우기 ('+cloze+'개)</button>';
 
       panel.innerHTML = renderStatsPanel() +
         '<div class="review-summary">'+summaryHtml+'</div>' +
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
-        (catButtons ? '<div class="review-start-row" style="margin-top:10px;">'+catButtons+'</div>' : '') +
+        (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderDirectionRow();
 
@@ -678,8 +658,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (allBtn) allBtn.addEventListener('click', function(){ startReview('all'); });
       var weakBtn = document.getElementById('start-weak');
       if (weakBtn) weakBtn.addEventListener('click', function(){ startReview('weak'); });
-      var clozeBtn = document.getElementById('start-cloze');
-      if (clozeBtn) clozeBtn.addEventListener('click', function(){ startClozeReview(); });
       panel.querySelectorAll('[data-cat-review]').forEach(function(btn){
         btn.addEventListener('click', function(){ startReview('all', btn.getAttribute('data-cat-review')); });
       });
@@ -702,19 +680,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }
     var cur = state.reviewQueue[state.reviewIdx];
     var cat = cur.cat, it = cur.item;
-    var isCloze = cur.mode === 'cloze';
     var isReverse = cur.dir === 'reverse';
     var term = it[TITLE_KEY[cat]] || '';
     var front, backRows, tagLabel, speakText;
 
-    if (isCloze){
-      front = it.example.split(term).join('＿＿＿＿');
-      tagLabel = CATS[cat].label + ' · 예문 빈칸';
-      speakText = it.example;
-      backRows = [['정답', term], ['원문', it.example]].concat(
-        backRowsFor(cat, it).filter(function(r){ return r[0] !== '예문'; })
-      );
-    } else if (isReverse){
+    if (isReverse){
       front = it.meaning || '';
       tagLabel = CATS[cat].label + ' · 뜻→일본어';
       speakText = term;
