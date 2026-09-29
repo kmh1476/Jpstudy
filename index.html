@@ -975,9 +975,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var paginationHtml = '';
     if (totalPages > 1){
       paginationHtml = '<div class="pagination-row">' +
+        '<button data-page="first" '+(page<=1?'disabled':'')+'>« 맨 앞</button>' +
         '<button data-page="prev" '+(page<=1?'disabled':'')+'>‹ 이전</button>' +
         '<span class="page-indicator">'+page+' / '+totalPages+' 페이지 ('+allItems.length+'개)</span>' +
         '<button data-page="next" '+(page>=totalPages?'disabled':'')+'>다음 ›</button>' +
+        '<button data-page="last" '+(page>=totalPages?'disabled':'')+'>맨 끝 »</button>' +
         '</div>';
     }
     return '<div class="item-list">' + rows + '</div>' + paginationHtml;
@@ -1078,7 +1080,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     panel.querySelectorAll('[data-page]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var dir = btn.getAttribute('data-page');
-        state.page[cat] += (dir === 'next') ? 1 : -1;
+        if (dir === 'first') state.page[cat] = 1;
+        else if (dir === 'last') state.page[cat] = Math.max(1, Math.ceil(filteredSortedItems(cat).length / PAGE_SIZE));
+        else state.page[cat] += (dir === 'next') ? 1 : -1;
         refreshListOnly(cat);
       });
     });
