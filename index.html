@@ -147,6 +147,8 @@
 
   form.entry { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-bottom: 22px; padding-bottom: 20px; border-bottom: 1px dashed var(--line-strong); }
   form.entry .full { grid-column: 1 / -1; }
+  .dup-warning { color: var(--hanko); font-size: 13px; min-height: 0; }
+  .dup-warning:empty { display: none; }
   form.entry label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
   form.entry input, form.entry textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font-size: 15px; font-family: inherit; }
   form.entry textarea { resize: vertical; min-height: 44px; }
@@ -310,33 +312,33 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   var FIELD_DEFS = {
     vocab: [
-      { key:'word', label:'단어', type:'text' },
-      { key:'reading', label:'읽기', type:'text' },
-      { key:'meaning', label:'뜻', type:'text' },
+      { key:'word', label:'단어', type:'textarea' },
+      { key:'reading', label:'읽기', type:'textarea' },
+      { key:'meaning', label:'뜻', type:'textarea' },
       { key:'example', label:'예문', type:'textarea', full:true },
-      { key:'note', label:'비고', type:'text' },
+      { key:'note', label:'비고', type:'textarea', full:true },
       { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
     ],
     kanji: [
       { key:'kanji', label:'한자', type:'kanji' },
-      { key:'onyomi', label:'음독', type:'text' },
-      { key:'kunyomi', label:'훈독', type:'text' },
-      { key:'meaning', label:'뜻', type:'text' },
-      { key:'example', label:'대표 단어', type:'text' },
-      { key:'note', label:'비고', type:'text', full:true }
+      { key:'onyomi', label:'음독', type:'textarea' },
+      { key:'kunyomi', label:'훈독', type:'textarea' },
+      { key:'meaning', label:'뜻', type:'textarea' },
+      { key:'example', label:'대표 단어', type:'textarea' },
+      { key:'note', label:'비고', type:'textarea', full:true }
     ],
     grammar: [
-      { key:'pattern', label:'문형', type:'text' },
-      { key:'conjugation', label:'접속 형태', type:'text' },
+      { key:'pattern', label:'문형', type:'textarea' },
+      { key:'conjugation', label:'접속 형태', type:'textarea' },
       { key:'meaning', label:'의미', type:'textarea', full:true },
-      { key:'note', label:'비고', type:'text', full:true },
+      { key:'note', label:'비고', type:'textarea', full:true },
       { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
     ],
     expr: [
-      { key:'expr', label:'표현', type:'text' },
-      { key:'meaning', label:'의미', type:'text' },
+      { key:'expr', label:'표현', type:'textarea' },
+      { key:'meaning', label:'의미', type:'textarea' },
       { key:'example', label:'예문', type:'textarea', full:true },
-      { key:'note', label:'비고', type:'text' },
+      { key:'note', label:'비고', type:'textarea', full:true },
       { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
     ]
   };
@@ -396,6 +398,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         state.streak = d.streak;
         renderStreakBadge();
         if (state.activeTab === 'review') renderReview();
+      }
+      if (d.dailyCap !== undefined && d.dailyCap !== state.dailyCap){
+        state.dailyCap = d.dailyCap;
+        if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
       }
     }, function(err){ console.error('settings snapshot error', err); });
     unsubscribers.push(unsubSettings);
@@ -496,6 +502,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     kanaFilter: { vocab:null, kanji:null, grammar:null, expr:null },
     page: { vocab:1, kanji:1, grammar:1, expr:1 },
     streak: { count: 0, lastDate: null },
+    dailyCap: 30,
+    pendingFocusCat: null,
     reviewDirection: 'mixed'
   };
 
@@ -576,7 +584,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return shuffle(q);
   }
   function startReview(mode, onlyCat){
-    state.reviewQueue = buildQueue(mode, onlyCat);
+    var queue = buildQueue(mode, onlyCat);
+    if (mode === 'due' && state.dailyCap !== 'all' && queue.length > state.dailyCap){
+      queue = queue.slice(0, state.dailyCap);
+    }
+    state.reviewQueue = queue;
     state.reviewIdx = 0;
     state.reviewFlipped = false;
     renderReview();
@@ -625,6 +637,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<button data-dir="'+o[0]+'" class="'+(state.reviewDirection===o[0]?'active':'')+'">'+o[1]+'</button>';
       }).join('') + '</div>';
   }
+  function renderCapRow(){
+    var opts = [20, 30, 50, 'all'];
+    return '<div class="direction-row"><span class="direction-label">오늘 복습량:</span>' +
+      opts.map(function(o){
+        var label = o === 'all' ? '전체' : (o + '개');
+        return '<button data-cap="'+o+'" class="'+(state.dailyCap===o?'active':'')+'">'+label+'</button>';
+      }).join('') + '</div>';
+  }
 
   function renderReview(){
     var panel = document.getElementById('panel-review');
@@ -634,8 +654,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<div class="review-card"><div class="n '+CATS[c].color+'">'+dueCount(c)+'</div><div class="label">'+CATS[c].label+' 복습</div></div>';
       }).join('');
       var due = totalDue(), all = totalAll(), weak = totalWeak();
+      var dueForToday = (state.dailyCap !== 'all' && due > state.dailyCap) ? state.dailyCap : due;
       var buttons = '';
-      if (due > 0) buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+due+'개)</button>';
+      if (due > 0){
+        var dueLabel = (dueForToday < due) ? (dueForToday+'개 · 오늘 밀린 건 총 '+due+'개') : (due+'개');
+        buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+dueLabel+')</button>';
+      }
       if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
       var catChips = Object.keys(CATS).map(function(c){
         var n = data[c].length;
@@ -650,6 +674,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
+        renderCapRow() +
         renderDirectionRow();
 
       var dueBtn = document.getElementById('start-due');
@@ -658,6 +683,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (allBtn) allBtn.addEventListener('click', function(){ startReview('all'); });
       var weakBtn = document.getElementById('start-weak');
       if (weakBtn) weakBtn.addEventListener('click', function(){ startReview('weak'); });
+      panel.querySelectorAll('[data-cap]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var raw = btn.getAttribute('data-cap');
+          state.dailyCap = raw === 'all' ? 'all' : parseInt(raw, 10);
+          if (settingsRef) settingsRef.set({ dailyCap: state.dailyCap }, { merge: true }).catch(function(){});
+          renderReview();
+        });
+      });
       panel.querySelectorAll('[data-cat-review]').forEach(function(btn){
         btn.addEventListener('click', function(){ startReview('all', btn.getAttribute('data-cat-review')); });
       });
@@ -741,7 +774,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '</div>';
   }
   function generateFormFields(cat, prefix, existing){
-    return FIELD_DEFS[cat].map(function(f){ return fieldRowHtml(prefix, f, existing ? existing[f.key] : ''); }).join('');
+    var fields = FIELD_DEFS[cat];
+    var firstHtml = fieldRowHtml(prefix, fields[0], existing ? existing[fields[0].key] : '');
+    var warningHtml = '<div class="full dup-warning" id="'+prefix+'-dup-warning"></div>';
+    var restHtml = fields.slice(1).map(function(f){ return fieldRowHtml(prefix, f, existing ? existing[f.key] : ''); }).join('');
+    return firstHtml + warningHtml + restHtml;
   }
   function readFormFields(cat, prefix){
     var out = {};
@@ -750,6 +787,26 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       out[f.key] = el ? el.value.trim() : '';
     });
     return out;
+  }
+  function findDuplicate(cat, value, excludeId){
+    value = (value || '').trim();
+    if (!value) return null;
+    return data[cat].find(function(it){
+      return it.id !== excludeId && (it[TITLE_KEY[cat]] || '').trim() === value;
+    }) || null;
+  }
+  function bindDuplicateCheck(cat, prefix, excludeId){
+    var titleInput = document.getElementById(prefix + '-' + TITLE_KEY[cat]);
+    var warnEl = document.getElementById(prefix + '-dup-warning');
+    if (!titleInput || !warnEl) return;
+    function check(){
+      var dup = findDuplicate(cat, titleInput.value, excludeId);
+      warnEl.innerHTML = dup
+        ? '⚠️ 이미 등록된 항목이에요 — 뜻: '+esc(dup.meaning||'(없음)')+' · 등록 '+shortDate(dup.created)
+        : '';
+    }
+    titleInput.addEventListener('input', check);
+    check();
   }
   function renderUnknownWordsEditor(containerId, rowsArr){
     var wrap = document.getElementById(containerId);
@@ -802,6 +859,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     renderSortRow(cat);
     renderKanaRow(cat);
     bindListEvents(cat);
+    bindDuplicateCheck(cat, prefix, null);
 
     var searchInput = document.getElementById(cat + '-search');
     searchInput.addEventListener('input', function(){
@@ -823,8 +881,15 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var fields = readFormFields(cat, prefix);
       if (!fields[TITLE_KEY[cat]]) return;
       if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
+      state.pendingFocusCat = cat;
       addItem(cat, fields);
     });
+
+    if (state.pendingFocusCat === cat){
+      state.pendingFocusCat = null;
+      var firstField = document.getElementById(prefix + '-' + TITLE_KEY[cat]);
+      if (firstField) firstField.focus();
+    }
   }
 
   function renderSortRow(cat){
@@ -1027,6 +1092,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     html += '<div class="actions"><button type="button" class="secondary" id="'+prefix+'-cancel">취소</button><button type="submit" class="primary">저장</button></div></form>';
 
     setTimeout(function(){
+      bindDuplicateCheck(cat, prefix, it.id);
       if (isExpr){
         renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
         var addBtn = document.getElementById(prefix + '-add-word');
@@ -1121,6 +1187,24 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   });
   document.getElementById('logout-btn').addEventListener('click', function(){
     auth.signOut();
+  });
+
+  // 단어/한자/문형 등 입력칸에서 (특히 한글·일본어 입력 중 엔터로 조합을
+  // 확정할 때) 실수로 폼이 그대로 제출되지 않도록 막음. 대신 Ctrl(⌘)+Enter로
+  // 어느 칸에서든 바로 저장할 수 있음 — 터치 없이 키보드만으로 입력 가능.
+  document.addEventListener('keydown', function(e){
+    var form = e.target && e.target.closest && e.target.closest('form.entry');
+    if (!form) return;
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){
+      e.preventDefault();
+      if (form.requestSubmit) form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      return;
+    }
+    if (e.key === 'Enter' && !e.isComposing && e.target.tagName === 'INPUT' &&
+        (e.target.type === 'text' || !e.target.type)){
+      e.preventDefault();
+    }
   });
 
   auth.onAuthStateChanged(function(user){
