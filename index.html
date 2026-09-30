@@ -385,7 +385,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var unsub = ref.onSnapshot(function(snap){
         var d = snap.exists ? snap.data() : null;
         data[cat] = (d && Array.isArray(d.items)) ? d.items : [];
-        renderAll();
+        if (state.activeTab === cat && document.getElementById(cat + '-list-container')){
+          // 이 탭을 입력 중이면 폼은 그대로 두고 목록만 갱신 — Ctrl+Enter 저장 직후
+          // 맞춰둔 포커스(키보드)가 이 재렌더링 때문에 풀리지 않도록 함.
+          renderTabs();
+          refreshListOnly(cat);
+        } else {
+          renderAll();
+        }
       }, function(err){ console.error('snapshot error', cat, err); setSyncBadge('error'); });
       unsubscribers.push(unsub);
     });
