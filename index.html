@@ -950,6 +950,15 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
   }
 
+  // "+ 추가" 버튼으로 줄을 늘린 직후, 새 줄의 첫 칸으로 포커스를 옮겨서
+  // Tab만으로 계속 이어서 입력할 수 있게 함(터치 없이).
+  function focusNewRow(containerId, fieldAttr){
+    var wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    var inputs = wrap.querySelectorAll('[data-f="'+fieldAttr+'"]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }
+
   // ---------- Category panels ----------
   function renderCategoryPanel(cat){
     var panel = document.getElementById('panel-' + cat);
@@ -997,6 +1006,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       document.getElementById(prefix + '-add-reading').addEventListener('click', function(){
         readingRows.push({ type:'on', reading:'', words:'' });
         renderReadingsEditor(prefix + '-readings-list', readingRows);
+        focusNewRow(prefix + '-readings-list', 'reading');
       });
     }
     if (isExpr){
@@ -1004,6 +1014,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       document.getElementById(prefix + '-add-word').addEventListener('click', function(){
         unknownRows.push({ word:'', reading:'', meaning:'' });
         renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+        focusNewRow(prefix + '-unknown-list', 'word');
       });
     }
 
@@ -1250,6 +1261,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         if (addReadingBtn) addReadingBtn.addEventListener('click', function(){
           readingRows.push({ type:'on', reading:'', words:'' });
           renderReadingsEditor(prefix + '-readings-list', readingRows);
+          focusNewRow(prefix + '-readings-list', 'reading');
         });
       }
       if (isExpr){
@@ -1258,6 +1270,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         if (addBtn) addBtn.addEventListener('click', function(){
           unknownRows.push({ word:'', reading:'', meaning:'' });
           renderUnknownWordsEditor(prefix + '-unknown-list', unknownRows);
+          focusNewRow(prefix + '-unknown-list', 'word');
         });
       }
       var cancelBtn = document.getElementById(prefix + '-cancel');
