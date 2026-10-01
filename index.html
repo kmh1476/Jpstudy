@@ -403,6 +403,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (it.kunyomi) out.push({ type:'kun', reading: it.kunyomi, words: (!it.onyomi && it.example) ? [{ word: it.example, reading:'', meaning:'' }] : [] });
     return out;
   }
+  // 입력한 순서와 상관없이 목록/복습에서는 항상 음독을 먼저, 훈독을 나중에 보여줌.
+  function sortedReadingGroups(it){
+    var groups = getReadingGroups(it).slice();
+    var rank = { on: 0, kun: 1 };
+    groups.sort(function(a, b){ return (rank[a.type] || 0) - (rank[b.type] || 0); });
+    return groups;
+  }
   function formatKanjiWordList(words){
     return words.map(function(w){
       var s = w.word || '';
@@ -1047,7 +1054,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     function emptyWords(n){ var a=[]; for (var i=0;i<n;i++) a.push({word:'',reading:'',meaning:''}); return a; }
     var readingGroups = isKanji ? [
       { type:'on', reading:'', words: emptyWords(2) },
-      { type:'on', reading:'', words: emptyWords(2) },
       { type:'kun', reading:'', words: emptyWords(2) }
     ] : [];
 
@@ -1302,7 +1308,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return html;
   }
   function readingDetailRows(it){
-    return getReadingGroups(it)
+    return sortedReadingGroups(it)
       .filter(function(g){ return g.reading || g.words.length; })
       .map(function(g){
         var label = (g.type === 'on' ? '음독 ' : '훈독 ') + (g.reading || '');
