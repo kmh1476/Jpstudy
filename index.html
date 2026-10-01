@@ -767,11 +767,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     html += '</div>';
     if (state.reviewFlipped){
       html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>'; }).join('') + '</div>';
-      html += '<div class="swipe-hint">← 까먹었어요&nbsp;&nbsp;·&nbsp;&nbsp;기억나요 →</div>';
+      html += '<div class="swipe-hint">← 까먹었어요(←키)&nbsp;&nbsp;·&nbsp;&nbsp;기억나요(→키) →</div>';
     }
     html += '</div>';
     html += !state.reviewFlipped
-      ? '<div class="review-actions"><button class="primary" id="flip-btn">답 보기</button></div>'
+      ? '<div class="review-actions"><button class="primary" id="flip-btn">답 보기</button></div><div class="swipe-hint">스페이스바로도 답을 볼 수 있어요</div>'
       : '<div class="review-actions"><button class="forgot" id="forgot-btn">까먹었어요</button><button class="remembered" id="remember-btn">기억나요</button></div>';
     panel.innerHTML = html;
 
@@ -1280,6 +1280,31 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (e.key === 'Enter' && !e.isComposing && e.target.tagName === 'INPUT' &&
         (e.target.type === 'text' || !e.target.type)){
       e.preventDefault();
+    }
+  });
+
+  // 복습 중 키보드 단축키: 스페이스바 = 답 보기, ← = 까먹었어요, → = 기억나요.
+  document.addEventListener('keydown', function(e){
+    if (state.activeTab !== 'review' || !state.reviewQueue) return;
+    if (state.reviewIdx >= state.reviewQueue.length) return;
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    if (e.code === 'Space' || e.key === ' '){
+      if (!state.reviewFlipped){
+        e.preventDefault();
+        state.reviewFlipped = true;
+        renderReview();
+      }
+      return;
+    }
+    if (state.reviewFlipped && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')){
+      e.preventDefault();
+      var cur = state.reviewQueue[state.reviewIdx];
+      reviewResult(cur.cat, cur.item.id, e.key === 'ArrowRight');
+      state.reviewIdx += 1;
+      state.reviewFlipped = false;
+      renderReview();
     }
   });
 
