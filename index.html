@@ -359,12 +359,36 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   // 한자 읽기 목록을 통일된 형태로 반환: {type:'on'|'kun', reading, words}[]
   // 신규 항목은 it.readings를 바로 쓰고, 예전 방식(onyomi/kunyomi/example 단일 필드)으로
   // 저장된 항목은 자동으로 변환해서 보여줌 — 기존 데이터는 그대로 안전하게 남아있음.
+  // 항상 "예시 단어 1개 = 1행" 형태의 평면 배열로 반환: {type:'on'|'kun', word, reading, meaning}[]
+  // 예전 두 가지 저장 방식(그룹형 {type,reading,words:"쉼표,구분"} / 아주 예전 onyomi·kunyomi·example
+  // 단일 필드)도 자동으로 변환해서 보여줌 — 기존 데이터는 그대로 안전함.
   function getKanjiReadings(it){
-    if (Array.isArray(it.readings)) return it.readings;
+    if (Array.isArray(it.readings)){
+      if (!it.readings.length) return [];
+      if (typeof it.readings[0].word !== 'undefined') return it.readings; // 최신(평면) 형태
+      var out = [];
+      it.readings.forEach(function(r){
+        var words = (r.words || '').split(',').map(function(w){ return w.trim(); }).filter(Boolean);
+        if (!words.length) words = [''];
+        words.forEach(function(w){ out.push({ type: r.type, word: w, reading: r.reading, meaning: '' }); });
+      });
+      return out;
+    }
     var arr = [];
-    if (it.onyomi) arr.push({ type:'on', reading: it.onyomi, words: it.example || '' });
-    if (it.kunyomi) arr.push({ type:'kun', reading: it.kunyomi, words: it.onyomi ? '' : (it.example || '') });
+    if (it.onyomi) arr.push({ type:'on', word: it.example || '', reading: it.onyomi, meaning:'' });
+    if (it.kunyomi) arr.push({ type:'kun', word: it.onyomi ? '' : (it.example || ''), reading: it.kunyomi, meaning:'' });
     return arr;
+  }
+  // 화면 표시용: 같은 발음(음독/훈독)끼리 단어들을 묶어서 반환.
+  function groupedKanjiReadings(it){
+    var flat = getKanjiReadings(it);
+    var groups = {}, order = [];
+    flat.forEach(function(e){
+      var key = e.type + '|' + e.reading;
+      if (!groups[key]){ groups[key] = { type:e.type, reading:e.reading, words:[] }; order.push(key); }
+      if (e.word) groups[key].words.push(e.word + (e.meaning ? '('+e.meaning+')' : ''));
+    });
+    return order.map(function(k){ return groups[k]; });
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
@@ -917,7 +941,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
   }
 
-  // 한자용: 음독/훈독마다 그 발음이 쓰이는 단어들을 따로 묶어서 기록.
+  // 한자용: 예시 단어 1개마다 음/훈 구분 + 단어 + 읽기 + 뜻을 따로따로 입력
+  // (예: 一 / いち / 일) — 괄호 조합 없이 칸마다 바로 타이핑.
   function renderReadingsEditor(containerId, rowsArr){
     var wrap = document.getElementById(containerId);
     if (!wrap) return;
@@ -927,8 +952,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
           '<option value="on"'+(r.type==='on'?' selected':'')+'>음독</option>' +
           '<option value="kun"'+(r.type==='kun'?' selected':'')+'>훈독</option>' +
         '</select>' +
-        '<input placeholder="발음" data-i="'+i+'" data-f="reading" class="rd-input" value="'+esc(r.reading)+'">' +
-        '<input placeholder="이 발음으로 나는 단어들 (쉼표로 구분)" data-i="'+i+'" data-f="words" class="rd-input" value="'+esc(r.words)+'">' +
+        '<input placeholder="단어" data-i="'+i+'" data-f="word" class="rd-input" value="'+esc(r.word)+'">' +
+        '<input placeholder="읽기" data-i="'+i+'" data-f="reading" class="rd-input" value="'+esc(r.reading)+'">' +
+        '<input placeholder="뜻" data-i="'+i+'" data-f="meaning" class="rd-input" value="'+esc(r.meaning)+'">' +
         '<button type="button" class="icon-x" data-remove-rd="'+i+'">×</button>' +
         '</div>';
     }).join('');
@@ -970,9 +996,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
     var formHtml = '<form class="entry" id="'+cat+'-form">' + generateFormFields(cat, prefix, null);
     if (isKanji){
-      formHtml += '<div class="full"><label>음독/훈독별 단어</label>' +
+      formHtml += '<div class="full"><label>예시 단어 (음독/훈독)</label>' +
         '<div class="word-mini-list" id="'+prefix+'-readings-list"></div>' +
-        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 발음 추가</button></div>';
+        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 예시 단어 추가</button></div>';
     }
     if (isExpr){
       formHtml += '<div class="full"><label>표현 중 모르는 단어</label>' +
@@ -1004,9 +1030,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (isKanji){
       renderReadingsEditor(prefix + '-readings-list', readingRows);
       document.getElementById(prefix + '-add-reading').addEventListener('click', function(){
-        readingRows.push({ type:'on', reading:'', words:'' });
+        readingRows.push({ type:'on', word:'', reading:'', meaning:'' });
         renderReadingsEditor(prefix + '-readings-list', readingRows);
-        focusNewRow(prefix + '-readings-list', 'reading');
+        focusNewRow(prefix + '-readings-list', 'word');
       });
     }
     if (isExpr){
@@ -1023,7 +1049,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var fields = readFormFields(cat, prefix);
       if (!fields[TITLE_KEY[cat]]) return;
       if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
-      if (isKanji) fields.readings = readingRows.filter(function(r){ return r.reading && r.reading.trim(); });
+      if (isKanji) fields.readings = readingRows.filter(function(r){ return (r.word && r.word.trim()) || (r.reading && r.reading.trim()); });
       state.pendingFocusCat = cat;
       addItem(cat, fields);
     });
@@ -1114,7 +1140,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function searchableText(cat, it){
     var parts = [it[TITLE_KEY[cat]], it.meaning, it.example, it.note, it.mySentence];
     if (cat === 'vocab') parts.push(it.reading);
-    if (cat === 'kanji') getKanjiReadings(it).forEach(function(r){ parts.push(r.reading, r.words); });
+    if (cat === 'kanji') getKanjiReadings(it).forEach(function(r){ parts.push(r.reading, r.word, r.meaning); });
     if (cat === 'grammar') parts.push(it.conjugation);
     if (cat === 'expr' && it.unknownWords) it.unknownWords.forEach(function(w){ parts.push(w.word, w.reading, w.meaning); });
     return parts.filter(Boolean).join(' ').toLowerCase();
@@ -1139,9 +1165,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
   function subDisplay(cat, it){
     if (cat === 'kanji'){
-      var readings = getKanjiReadings(it);
-      var onList = readings.filter(function(r){ return r.type === 'on'; }).map(function(r){ return r.reading; });
-      var kunList = readings.filter(function(r){ return r.type === 'kun'; }).map(function(r){ return r.reading; });
+      var groups = groupedKanjiReadings(it);
+      var onList = groups.filter(function(r){ return r.type === 'on'; }).map(function(r){ return r.reading; });
+      var kunList = groups.filter(function(r){ return r.type === 'kun'; }).map(function(r){ return r.reading; });
       var parts = [];
       if (onList.length) parts.push('음: ' + onList.join('・'));
       if (kunList.length) parts.push('훈: ' + kunList.join('・'));
@@ -1212,9 +1238,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return html;
   }
   function readingDetailRows(it){
-    return getKanjiReadings(it).map(function(r){
+    return groupedKanjiReadings(it).map(function(r){
       var label = (r.type === 'on' ? '음독 ' : '훈독 ') + r.reading;
-      return [label, r.words || ''];
+      return [label, r.words.join(', ')];
     });
   }
   // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
@@ -1239,12 +1265,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var isExpr = cat === 'expr';
     var isKanji = cat === 'kanji';
     var unknownRows = isExpr ? (it.unknownWords || []).map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; }) : [];
-    var readingRows = isKanji ? getKanjiReadings(it).map(function(r){ return { type:r.type||'on', reading:r.reading||'', words:r.words||'' }; }) : [];
+    var readingRows = isKanji ? getKanjiReadings(it).map(function(r){ return { type:r.type||'on', word:r.word||'', reading:r.reading||'', meaning:r.meaning||'' }; }) : [];
     var html = '<form class="entry" id="'+prefix+'-form" style="margin-bottom:0;padding-bottom:6px;border-bottom:none;">' + generateFormFields(cat, prefix, it);
     if (isKanji){
-      html += '<div class="full"><label>음독/훈독별 단어</label>' +
+      html += '<div class="full"><label>예시 단어 (음독/훈독)</label>' +
         '<div class="word-mini-list" id="'+prefix+'-readings-list"></div>' +
-        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 발음 추가</button></div>';
+        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 예시 단어 추가</button></div>';
     }
     if (isExpr){
       html += '<div class="full"><label>표현 중 모르는 단어</label>' +
@@ -1259,9 +1285,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderReadingsEditor(prefix + '-readings-list', readingRows);
         var addReadingBtn = document.getElementById(prefix + '-add-reading');
         if (addReadingBtn) addReadingBtn.addEventListener('click', function(){
-          readingRows.push({ type:'on', reading:'', words:'' });
+          readingRows.push({ type:'on', word:'', reading:'', meaning:'' });
           renderReadingsEditor(prefix + '-readings-list', readingRows);
-          focusNewRow(prefix + '-readings-list', 'reading');
+          focusNewRow(prefix + '-readings-list', 'word');
         });
       }
       if (isExpr){
@@ -1280,7 +1306,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         e.preventDefault();
         var fields = readFormFields(cat, prefix);
         if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
-        if (isKanji) fields.readings = readingRows.filter(function(r){ return r.reading && r.reading.trim(); });
+        if (isKanji) fields.readings = readingRows.filter(function(r){ return (r.word && r.word.trim()) || (r.reading && r.reading.trim()); });
         updateItem(cat, it.id, fields);
         state.editMode[it.id] = false;
       });
