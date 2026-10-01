@@ -224,7 +224,10 @@
   .item-detail .row b { color: var(--muted); font-weight: 500; margin-right: 6px; }
   .item-detail .detail-actions { margin-top: 10px; display: flex; gap: 14px; }
 
-  .word-mini-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .word-mini-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+  .reading-group { border: 1px solid var(--line-strong); border-radius: 3px; padding: 10px; background: var(--paper); }
+  .reading-group .word-mini-row { margin-bottom: 6px; }
+  .reading-group-words { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px 14px; }
   .word-mini-row { display: flex; gap: 6px; align-items: center; }
   .word-mini-row input { flex: 1; padding: 7px 8px; font-size: 14px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--paper); color: var(--ink); min-width: 0; }
   .word-mini-row select { flex: 0 0 72px; padding: 7px 4px; font-size: 13px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--paper); color: var(--ink); }
@@ -359,36 +362,54 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   // 한자 읽기 목록을 통일된 형태로 반환: {type:'on'|'kun', reading, words}[]
   // 신규 항목은 it.readings를 바로 쓰고, 예전 방식(onyomi/kunyomi/example 단일 필드)으로
   // 저장된 항목은 자동으로 변환해서 보여줌 — 기존 데이터는 그대로 안전하게 남아있음.
-  // 항상 "예시 단어 1개 = 1행" 형태의 평면 배열로 반환: {type:'on'|'kun', word, reading, meaning}[]
-  // 예전 두 가지 저장 방식(그룹형 {type,reading,words:"쉼표,구분"} / 아주 예전 onyomi·kunyomi·example
-  // 단일 필드)도 자동으로 변환해서 보여줌 — 기존 데이터는 그대로 안전함.
-  function getKanjiReadings(it){
-    if (Array.isArray(it.readings)){
-      if (!it.readings.length) return [];
-      if (typeof it.readings[0].word !== 'undefined') return it.readings; // 최신(평면) 형태
-      var out = [];
-      it.readings.forEach(function(r){
-        var words = (r.words || '').split(',').map(function(w){ return w.trim(); }).filter(Boolean);
-        if (!words.length) words = [''];
-        words.forEach(function(w){ out.push({ type: r.type, word: w, reading: r.reading, meaning: '' }); });
-      });
-      return out;
+  // 한자 읽기 구조(교재 방식): 음독/훈독 "기본 읽기"가 여러 개 있을 수 있고,
+  // 그 읽기마다 예시 단어가 여러 개 딸려있음. 각 단어는 자기 고유의 읽기도 따로 가짐
+  // (예: 음독 さん → 三(さん), 三角形(さんかくけい), 三時(さんじ) ...).
+  // 항상 이 중첩 형태로 정규화해서 반환: {type:'on'|'kun', reading, words:[{word,reading,meaning}]}[]
+  // 예전 세 가지 저장 방식도 자동 변환해서 보여줌 — 기존 데이터는 그대로 안전함.
+  function getReadingGroups(it){
+    if (Array.isArray(it.readings) && it.readings.length){
+      var first = it.readings[0];
+      if (Array.isArray(first.words)){
+        // 최신(중첩) 형태
+        return it.readings.map(function(g){
+          return {
+            type: g.type || 'on', reading: g.reading || '',
+            words: (g.words || []).map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; })
+          };
+        });
+      }
+      if (typeof first.word !== 'undefined'){
+        // 직전 버전: 평면(단어 1개=1행) 형태 -> type+reading으로 묶어서 그룹화
+        var groups = {}, order = [];
+        it.readings.forEach(function(e){
+          var key = e.type + '|' + e.reading;
+          if (!groups[key]){ groups[key] = { type:e.type, reading:e.reading, words:[] }; order.push(key); }
+          groups[key].words.push({ word:e.word||'', reading:e.reading||'', meaning:e.meaning||'' });
+        });
+        return order.map(function(k){ return groups[k]; });
+      }
+      if (typeof first.words === 'string'){
+        // 그 전전 버전: {type,reading,words:"쉼표,구분"}
+        return it.readings.map(function(g){
+          var words = (g.words || '').split(',').map(function(w){ return w.trim(); }).filter(Boolean);
+          return { type:g.type, reading:g.reading||'', words: words.map(function(w){ return { word:w, reading:'', meaning:'' }; }) };
+        });
+      }
     }
-    var arr = [];
-    if (it.onyomi) arr.push({ type:'on', word: it.example || '', reading: it.onyomi, meaning:'' });
-    if (it.kunyomi) arr.push({ type:'kun', word: it.onyomi ? '' : (it.example || ''), reading: it.kunyomi, meaning:'' });
-    return arr;
+    // 아주 예전: onyomi/kunyomi/example 단일 필드
+    var out = [];
+    if (it.onyomi) out.push({ type:'on', reading: it.onyomi, words: it.example ? [{ word: it.example, reading:'', meaning:'' }] : [] });
+    if (it.kunyomi) out.push({ type:'kun', reading: it.kunyomi, words: (!it.onyomi && it.example) ? [{ word: it.example, reading:'', meaning:'' }] : [] });
+    return out;
   }
-  // 화면 표시용: 같은 발음(음독/훈독)끼리 단어들을 묶어서 반환.
-  function groupedKanjiReadings(it){
-    var flat = getKanjiReadings(it);
-    var groups = {}, order = [];
-    flat.forEach(function(e){
-      var key = e.type + '|' + e.reading;
-      if (!groups[key]){ groups[key] = { type:e.type, reading:e.reading, words:[] }; order.push(key); }
-      if (e.word) groups[key].words.push(e.word + (e.meaning ? '('+e.meaning+')' : ''));
-    });
-    return order.map(function(k){ return groups[k]; });
+  function formatKanjiWordList(words){
+    return words.map(function(w){
+      var s = w.word || '';
+      if (w.reading) s += '(' + w.reading + ')';
+      if (w.meaning) s += ' — ' + w.meaning;
+      return s;
+    }).join(', ');
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
@@ -943,35 +964,66 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   // 한자용: 예시 단어 1개마다 음/훈 구분 + 단어 + 읽기 + 뜻을 따로따로 입력
   // (예: 一 / いち / 일) — 괄호 조합 없이 칸마다 바로 타이핑.
-  function renderReadingsEditor(containerId, rowsArr){
+  // 한자용: 음독/훈독 "기본 읽기"를 여러 개 만들고, 그 읽기마다 예시 단어를
+  // 여러 개씩 딸려 넣는 중첩 에디터 (교재처럼 さん: 三, 三角形, 三時 ... 형태).
+  function renderReadingGroupsEditor(containerId, groupsArr){
     var wrap = document.getElementById(containerId);
     if (!wrap) return;
-    wrap.innerHTML = rowsArr.map(function(r, i){
-      return '<div class="word-mini-row">' +
-        '<select data-i="'+i+'" data-f="type" class="rd-input">' +
-          '<option value="on"'+(r.type==='on'?' selected':'')+'>음독</option>' +
-          '<option value="kun"'+(r.type==='kun'?' selected':'')+'>훈독</option>' +
-        '</select>' +
-        '<input placeholder="단어" data-i="'+i+'" data-f="word" class="rd-input" value="'+esc(r.word)+'">' +
-        '<input placeholder="읽기" data-i="'+i+'" data-f="reading" class="rd-input" value="'+esc(r.reading)+'">' +
-        '<input placeholder="뜻" data-i="'+i+'" data-f="meaning" class="rd-input" value="'+esc(r.meaning)+'">' +
-        '<button type="button" class="icon-x" data-remove-rd="'+i+'">×</button>' +
+    wrap.innerHTML = groupsArr.map(function(g, gi){
+      var wordsHtml = g.words.map(function(w, wi){
+        return '<div class="word-mini-row">' +
+          '<input placeholder="단어" data-gi="'+gi+'" data-wi="'+wi+'" data-f="word" class="rg-input" value="'+esc(w.word)+'">' +
+          '<input placeholder="읽기" data-gi="'+gi+'" data-wi="'+wi+'" data-f="reading" class="rg-input" value="'+esc(w.reading)+'">' +
+          '<input placeholder="뜻" data-gi="'+gi+'" data-wi="'+wi+'" data-f="meaning" class="rg-input" value="'+esc(w.meaning)+'">' +
+          '<button type="button" class="icon-x" data-del-word="'+gi+':'+wi+'">×</button>' +
+          '</div>';
+      }).join('');
+      return '<div class="reading-group">' +
+        '<div class="word-mini-row">' +
+          '<select data-gi="'+gi+'" data-f="type" class="rg-input rg-type">' +
+            '<option value="on"'+(g.type==='on'?' selected':'')+'>음독</option>' +
+            '<option value="kun"'+(g.type==='kun'?' selected':'')+'>훈독</option>' +
+          '</select>' +
+          '<input placeholder="기본 읽기 (예: さん / みっ~)" data-gi="'+gi+'" data-f="reading" class="rg-input" value="'+esc(g.reading)+'">' +
+          '<button type="button" class="icon-x" data-del-group="'+gi+'" title="이 읽기 전체 삭제">×</button>' +
+        '</div>' +
+        '<div class="reading-group-words">'+wordsHtml+'</div>' +
+        '<button type="button" class="ghost" data-add-word="'+gi+'">+ 이 읽기에 단어 추가</button>' +
         '</div>';
     }).join('');
-    wrap.querySelectorAll('.rd-input').forEach(function(inp){
+
+    wrap.querySelectorAll('input.rg-input').forEach(function(inp){
       inp.addEventListener('input', function(){
-        var i = +inp.getAttribute('data-i'), f = inp.getAttribute('data-f');
-        rowsArr[i][f] = inp.value;
-      });
-      inp.addEventListener('change', function(){
-        var i = +inp.getAttribute('data-i'), f = inp.getAttribute('data-f');
-        rowsArr[i][f] = inp.value;
+        var gi = +inp.getAttribute('data-gi'), f = inp.getAttribute('data-f'), wi = inp.getAttribute('data-wi');
+        if (wi !== null) groupsArr[gi].words[+wi][f] = inp.value;
+        else groupsArr[gi][f] = inp.value;
       });
     });
-    wrap.querySelectorAll('[data-remove-rd]').forEach(function(btn){
+    wrap.querySelectorAll('select.rg-type').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        groupsArr[+sel.getAttribute('data-gi')].type = sel.value;
+      });
+    });
+    wrap.querySelectorAll('[data-del-word]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        rowsArr.splice(+btn.getAttribute('data-remove-rd'), 1);
-        renderReadingsEditor(containerId, rowsArr);
+        var parts = btn.getAttribute('data-del-word').split(':');
+        groupsArr[+parts[0]].words.splice(+parts[1], 1);
+        renderReadingGroupsEditor(containerId, groupsArr);
+      });
+    });
+    wrap.querySelectorAll('[data-del-group]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        groupsArr.splice(+btn.getAttribute('data-del-group'), 1);
+        renderReadingGroupsEditor(containerId, groupsArr);
+      });
+    });
+    wrap.querySelectorAll('[data-add-word]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var gi = +btn.getAttribute('data-add-word');
+        groupsArr[gi].words.push({ word:'', reading:'', meaning:'' });
+        renderReadingGroupsEditor(containerId, groupsArr);
+        var inputs = wrap.querySelectorAll('[data-gi="'+gi+'"][data-f="word"]');
+        if (inputs.length) inputs[inputs.length - 1].focus();
       });
     });
   }
@@ -992,13 +1044,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var isExpr = cat === 'expr';
     var isKanji = cat === 'kanji';
     var unknownRows = [];
-    var readingRows = [];
+    var readingGroups = [];
 
     var formHtml = '<form class="entry" id="'+cat+'-form">' + generateFormFields(cat, prefix, null);
     if (isKanji){
-      formHtml += '<div class="full"><label>예시 단어 (음독/훈독)</label>' +
+      formHtml += '<div class="full"><label>음독/훈독별 예시 단어</label>' +
         '<div class="word-mini-list" id="'+prefix+'-readings-list"></div>' +
-        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 예시 단어 추가</button></div>';
+        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 읽기 추가</button></div>';
     }
     if (isExpr){
       formHtml += '<div class="full"><label>표현 중 모르는 단어</label>' +
@@ -1028,11 +1080,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
 
     if (isKanji){
-      renderReadingsEditor(prefix + '-readings-list', readingRows);
+      renderReadingGroupsEditor(prefix + '-readings-list', readingGroups);
       document.getElementById(prefix + '-add-reading').addEventListener('click', function(){
-        readingRows.push({ type:'on', word:'', reading:'', meaning:'' });
-        renderReadingsEditor(prefix + '-readings-list', readingRows);
-        focusNewRow(prefix + '-readings-list', 'word');
+        readingGroups.push({ type:'on', reading:'', words:[] });
+        renderReadingGroupsEditor(prefix + '-readings-list', readingGroups);
+        var el = document.getElementById(prefix + '-readings-list');
+        var inputs = el.querySelectorAll('[data-f="reading"]:not([data-wi])');
+        if (inputs.length) inputs[inputs.length - 1].focus();
       });
     }
     if (isExpr){
@@ -1049,7 +1103,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var fields = readFormFields(cat, prefix);
       if (!fields[TITLE_KEY[cat]]) return;
       if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
-      if (isKanji) fields.readings = readingRows.filter(function(r){ return (r.word && r.word.trim()) || (r.reading && r.reading.trim()); });
+      if (isKanji) fields.readings = readingGroups
+        .filter(function(g){ return (g.reading && g.reading.trim()) || g.words.length; })
+        .map(function(g){ return { type:g.type, reading:g.reading.trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; });
       state.pendingFocusCat = cat;
       addItem(cat, fields);
     });
@@ -1131,8 +1187,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function readingKeyOf(cat, it){
     if (cat === 'vocab') return it.reading || it.word || '';
     if (cat === 'kanji'){
-      var rs = getKanjiReadings(it);
-      return (rs[0] && rs[0].reading) || it.kanji || '';
+      var groups = getReadingGroups(it);
+      return (groups[0] && groups[0].reading) || it.kanji || '';
     }
     if (cat === 'grammar') return it.pattern || '';
     return it.expr || '';
@@ -1140,7 +1196,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function searchableText(cat, it){
     var parts = [it[TITLE_KEY[cat]], it.meaning, it.example, it.note, it.mySentence];
     if (cat === 'vocab') parts.push(it.reading);
-    if (cat === 'kanji') getKanjiReadings(it).forEach(function(r){ parts.push(r.reading, r.word, r.meaning); });
+    if (cat === 'kanji') getReadingGroups(it).forEach(function(g){
+      parts.push(g.reading);
+      g.words.forEach(function(w){ parts.push(w.word, w.reading, w.meaning); });
+    });
     if (cat === 'grammar') parts.push(it.conjugation);
     if (cat === 'expr' && it.unknownWords) it.unknownWords.forEach(function(w){ parts.push(w.word, w.reading, w.meaning); });
     return parts.filter(Boolean).join(' ').toLowerCase();
@@ -1165,9 +1224,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
   function subDisplay(cat, it){
     if (cat === 'kanji'){
-      var groups = groupedKanjiReadings(it);
-      var onList = groups.filter(function(r){ return r.type === 'on'; }).map(function(r){ return r.reading; });
-      var kunList = groups.filter(function(r){ return r.type === 'kun'; }).map(function(r){ return r.reading; });
+      var groups = getReadingGroups(it);
+      var onList = groups.filter(function(g){ return g.type === 'on'; }).map(function(g){ return g.reading; }).filter(Boolean);
+      var kunList = groups.filter(function(g){ return g.type === 'kun'; }).map(function(g){ return g.reading; }).filter(Boolean);
       var parts = [];
       if (onList.length) parts.push('음: ' + onList.join('・'));
       if (kunList.length) parts.push('훈: ' + kunList.join('・'));
@@ -1238,10 +1297,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return html;
   }
   function readingDetailRows(it){
-    return groupedKanjiReadings(it).map(function(r){
-      var label = (r.type === 'on' ? '음독 ' : '훈독 ') + r.reading;
-      return [label, r.words.join(', ')];
-    });
+    return getReadingGroups(it)
+      .filter(function(g){ return g.reading || g.words.length; })
+      .map(function(g){
+        var label = (g.type === 'on' ? '음독 ' : '훈독 ') + (g.reading || '');
+        return [label.trim(), formatKanjiWordList(g.words)];
+      });
   }
   // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
   // and the created/next-review chips) are repeated here.
@@ -1265,12 +1326,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var isExpr = cat === 'expr';
     var isKanji = cat === 'kanji';
     var unknownRows = isExpr ? (it.unknownWords || []).map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; }) : [];
-    var readingRows = isKanji ? getKanjiReadings(it).map(function(r){ return { type:r.type||'on', word:r.word||'', reading:r.reading||'', meaning:r.meaning||'' }; }) : [];
+    var readingGroups = isKanji ? getReadingGroups(it).map(function(g){
+      return { type:g.type||'on', reading:g.reading||'', words:g.words.map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; }) };
+    }) : [];
     var html = '<form class="entry" id="'+prefix+'-form" style="margin-bottom:0;padding-bottom:6px;border-bottom:none;">' + generateFormFields(cat, prefix, it);
     if (isKanji){
-      html += '<div class="full"><label>예시 단어 (음독/훈독)</label>' +
+      html += '<div class="full"><label>음독/훈독별 예시 단어</label>' +
         '<div class="word-mini-list" id="'+prefix+'-readings-list"></div>' +
-        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 예시 단어 추가</button></div>';
+        '<button type="button" class="ghost" id="'+prefix+'-add-reading">+ 읽기 추가</button></div>';
     }
     if (isExpr){
       html += '<div class="full"><label>표현 중 모르는 단어</label>' +
@@ -1282,12 +1345,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     setTimeout(function(){
       bindDuplicateCheck(cat, prefix, it.id);
       if (isKanji){
-        renderReadingsEditor(prefix + '-readings-list', readingRows);
+        renderReadingGroupsEditor(prefix + '-readings-list', readingGroups);
         var addReadingBtn = document.getElementById(prefix + '-add-reading');
         if (addReadingBtn) addReadingBtn.addEventListener('click', function(){
-          readingRows.push({ type:'on', word:'', reading:'', meaning:'' });
-          renderReadingsEditor(prefix + '-readings-list', readingRows);
-          focusNewRow(prefix + '-readings-list', 'word');
+          readingGroups.push({ type:'on', reading:'', words:[] });
+          renderReadingGroupsEditor(prefix + '-readings-list', readingGroups);
+          var el = document.getElementById(prefix + '-readings-list');
+          var inputs = el.querySelectorAll('[data-f="reading"]:not([data-wi])');
+          if (inputs.length) inputs[inputs.length - 1].focus();
         });
       }
       if (isExpr){
@@ -1306,7 +1371,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         e.preventDefault();
         var fields = readFormFields(cat, prefix);
         if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
-        if (isKanji) fields.readings = readingRows.filter(function(r){ return (r.word && r.word.trim()) || (r.reading && r.reading.trim()); });
+        if (isKanji) fields.readings = readingGroups
+          .filter(function(g){ return (g.reading && g.reading.trim()) || g.words.length; })
+          .map(function(g){ return { type:g.type, reading:g.reading.trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; });
         updateItem(cat, it.id, fields);
         state.editMode[it.id] = false;
       });
