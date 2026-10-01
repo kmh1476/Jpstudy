@@ -1044,7 +1044,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var isExpr = cat === 'expr';
     var isKanji = cat === 'kanji';
     var unknownRows = [];
-    var readingGroups = [];
+    function emptyWords(n){ var a=[]; for (var i=0;i<n;i++) a.push({word:'',reading:'',meaning:''}); return a; }
+    var readingGroups = isKanji ? [
+      { type:'on', reading:'', words: emptyWords(2) },
+      { type:'on', reading:'', words: emptyWords(2) },
+      { type:'kun', reading:'', words: emptyWords(2) }
+    ] : [];
 
     var formHtml = '<form class="entry" id="'+cat+'-form">' + generateFormFields(cat, prefix, null);
     if (isKanji){
@@ -1104,8 +1109,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (!fields[TITLE_KEY[cat]]) return;
       if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
       if (isKanji) fields.readings = readingGroups
-        .filter(function(g){ return (g.reading && g.reading.trim()) || g.words.length; })
-        .map(function(g){ return { type:g.type, reading:g.reading.trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; });
+        .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
+        .filter(function(g){ return g.reading || g.words.length; });
       state.pendingFocusCat = cat;
       addItem(cat, fields);
     });
@@ -1372,8 +1377,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         var fields = readFormFields(cat, prefix);
         if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
         if (isKanji) fields.readings = readingGroups
-          .filter(function(g){ return (g.reading && g.reading.trim()) || g.words.length; })
-          .map(function(g){ return { type:g.type, reading:g.reading.trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; });
+          .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
+          .filter(function(g){ return g.reading || g.words.length; });
         updateItem(cat, it.id, fields);
         state.editMode[it.id] = false;
       });
