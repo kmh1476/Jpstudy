@@ -563,11 +563,18 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function reviewResult(cat, id, remembered){
     var it = data[cat].find(function(x){ return x.id === id; });
     if (!it) return;
-    it.box = remembered ? Math.min(it.box + 1, INTERVALS.length - 1) : 0;
-    it.next = addDays(todayStr(), INTERVALS[it.box]);
-    if (!remembered) it.wrongCount = (it.wrongCount || 0) + 1;
-    pushCategory(cat);
     bumpStreak();
+    var today = todayStr();
+    if (it.lastReviewedDate === today){
+      // 오늘 이미 한 번 복습한 항목 — 같은 날 또 풀어도 레벨/다음 복습일은 더 이상
+      // 안 바뀌게 함(그냥 추가 연습으로만 처리). 복습 대기 조작을 막기 위함.
+      return;
+    }
+    it.box = remembered ? Math.min(it.box + 1, INTERVALS.length - 1) : 0;
+    it.next = addDays(today, INTERVALS[it.box]);
+    if (!remembered) it.wrongCount = (it.wrongCount || 0) + 1;
+    it.lastReviewedDate = today;
+    pushCategory(cat);
   }
   function bumpStreak(){
     var today = todayStr();
@@ -678,7 +685,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     Object.keys(CATS).forEach(function(c){
       if (onlyCat && c !== onlyCat) return;
       var pool = mode === 'all' ? data[c] : (mode === 'weak' ? weakItems(c) : dueItems(c));
-      pool.forEach(function(it){ q.push({ cat: c, item: it, dir: pickDirection() }); });
+      // 한자는 방향 설정과 상관없이 항상 "한자 보고 맞추기"로 고정.
+      pool.forEach(function(it){ q.push({ cat: c, item: it, dir: c === 'kanji' ? 'normal' : pickDirection() }); });
     });
     return shuffle(q);
   }
@@ -709,6 +717,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return rows.filter(function(r){ return r[1] && String(r[1]).trim(); });
   }
 
+  function resetAllLevels(){
+    var total = totalAll();
+    if (!total) return;
+    if (!confirm('단어/한자/문법/표현 전체 '+total+'개 항목의 레벨을 초기화할까요?\n내용은 그대로 남고, 레벨(Lv.1)과 다음 복습일(오늘)만 리셋돼요.')) return;
+    Object.keys(CATS).forEach(function(cat){
+      data[cat].forEach(function(it){
+        it.box = 0;
+        it.next = todayStr();
+        it.wrongCount = 0;
+        delete it.lastReviewedDate;
+      });
+      pushCategory(cat);
+    });
+    renderAll();
+  }
   function renderStatsPanel(){
     var levels = [0,0,0,0,0,0,0];
     var total = 0;
@@ -734,7 +757,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return '<div class="direction-row"><span class="direction-label">방향:</span>' +
       opts.map(function(o){
         return '<button data-dir="'+o[0]+'" class="'+(state.reviewDirection===o[0]?'active':'')+'">'+o[1]+'</button>';
-      }).join('') + '</div>';
+      }).join('') + '<span class="direction-label">(한자는 항상 한자→뜻 고정)</span></div>';
   }
   function renderCapRow(){
     var opts = [20, 30, 50, 'all'];
@@ -774,8 +797,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderCapRow() +
-        renderDirectionRow();
+        renderDirectionRow() +
+        '<div style="margin-top:14px;"><button type="button" class="ghost" id="reset-levels-btn">모든 항목 레벨 초기화</button></div>';
 
+      var resetBtn = document.getElementById('reset-levels-btn');
+      if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
       var dueBtn = document.getElementById('start-due');
       if (dueBtn) dueBtn.addEventListener('click', function(){ startReview('due'); });
       var allBtn = document.getElementById('start-all');
