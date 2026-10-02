@@ -151,8 +151,12 @@
   .flashcard .cat-tag { font-size: 12px; color: var(--muted); }
   .flashcard .front { font-size: 42px; font-weight: 700; font-family: 'Noto Serif JP', serif; line-height: 1.4; letter-spacing: 0.04em; white-space: pre-wrap; }
   .flashcard .back { text-align: left; width: 100%; margin-top: 12px; border-top: 1px dashed var(--line-strong); padding-top: 14px; cursor: default; }
-  .flashcard .back .row { margin-bottom: 8px; font-size: 15px; line-height: 1.6; white-space: pre-wrap; }
-  .flashcard .back .row b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .flashcard .back .row { margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
+  .flashcard .back .row b {
+    display: block; color: var(--ink); font-weight: 700; font-size: 11px;
+    opacity: 0.85; border-left: 3px solid var(--line-strong); padding: 2px 8px; margin-bottom: 5px;
+  }
+  .flashcard .back .row .row-value { white-space: pre-wrap; padding-left: 2px; }
   .swipe-hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
   .review-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
   .review-actions button.forgot { background: var(--hanko); color: #fff; border: none; }
@@ -220,8 +224,13 @@
   .due-chip { display: inline-block; background: var(--hanko); color: #fff; padding: 2px 7px; border-radius: 2px; font-size: 11px; font-weight: 700; transform: rotate(-2deg); }
   .created-chip { color: var(--muted); font-size: 11px; }
   .item-detail { border: 1px solid var(--line-strong); border-radius: 2px; padding: 14px 16px; background: var(--paper2); margin-top: -4px; margin-bottom: 8px; }
-  .item-detail .row { font-size: 14px; margin-bottom: 7px; line-height: 1.6; white-space: pre-wrap; }
-  .item-detail .row b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+  .item-detail .row { font-size: 14px; margin-bottom: 12px; line-height: 1.7; }
+  .item-detail .row b {
+    display: block; color: var(--ink); font-weight: 700; font-size: 12px;
+    background: var(--paper); border-left: 3px solid var(--line-strong);
+    padding: 3px 8px; margin-bottom: 5px; border-radius: 0 2px 2px 0;
+  }
+  .item-detail .row .row-value { white-space: pre-wrap; padding-left: 2px; }
   .item-detail .detail-actions { margin-top: 10px; display: flex; gap: 14px; }
 
   .word-mini-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
@@ -413,10 +422,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function formatKanjiWordList(words){
     return words.map(function(w){
       var s = w.word || '';
-      if (w.reading) s += '(' + w.reading + ')';
-      if (w.meaning) s += ' — ' + w.meaning;
+      if (w.reading) s += '[' + w.reading + ']';
+      if (w.meaning) s += ' ' + w.meaning;
       return s;
-    }).join(', ');
+    }).join('    ');
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
@@ -690,9 +699,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       rows = [['의미', it.meaning], ['예문', it.example], ['비고', it.note], ['나만의 문장', it.mySentence]];
       if (it.unknownWords && it.unknownWords.length){
         rows.push(['모르는 단어', it.unknownWords.map(function(w){
-          var parts = [w.word]; if (w.reading) parts.push('('+w.reading+')'); if (w.meaning) parts.push('— '+w.meaning);
-          return parts.join(' ');
-        }).join(', ')]);
+          var s = w.word || ''; if (w.reading) s += '['+w.reading+']'; if (w.meaning) s += ' '+w.meaning;
+          return s;
+        }).join('    ')]);
       }
     }
     return rows.filter(function(r){ return r[1] && String(r[1]).trim(); });
@@ -826,7 +835,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (!isReverse) html += '<button type="button" class="speak-btn" id="speak-btn" title="발음 듣기">🔊</button>';
     html += '</div>';
     if (state.reviewFlipped){
-      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>'; }).join('') + '</div>';
+      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b><span class="row-value">'+esc(r[1])+'</span></div>'; }).join('') + '</div>';
       html += '<div class="swipe-hint">← 까먹었어요(←키)&nbsp;&nbsp;·&nbsp;&nbsp;기억나요(→키) →</div>';
     }
     html += '</div>';
@@ -1299,7 +1308,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function renderDetail(cat, it){
     var rows = backRowsForDetail(cat, it);
     var html = rows.filter(function(r){ return r[1]; }).map(function(r){
-      return '<div class="row"><b>'+esc(r[0])+'</b>'+esc(r[1])+'</div>';
+      return '<div class="row"><b>'+esc(r[0])+'</b><span class="row-value">'+esc(r[1])+'</span></div>';
     }).join('');
     html += '<div class="detail-actions">' +
       '<button class="ghost" data-edit="'+it.id+'" data-cat="'+cat+'">수정</button>' +
@@ -1325,9 +1334,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     else rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
     if (cat === 'expr' && it.unknownWords && it.unknownWords.length){
       rows.push(['모르는 단어', it.unknownWords.map(function(w){
-        var parts = [w.word]; if (w.reading) parts.push('('+w.reading+')'); if (w.meaning) parts.push('— '+w.meaning);
-        return parts.join(' ');
-      }).join(', ')]);
+        var s = w.word || ''; if (w.reading) s += '['+w.reading+']'; if (w.meaning) s += ' '+w.meaning;
+        return s;
+      }).join('    ')]);
     }
     return rows;
   }
