@@ -153,10 +153,11 @@
   .flashcard .back { text-align: left; width: 100%; margin-top: 12px; border-top: 1px dashed var(--line-strong); padding-top: 14px; cursor: default; }
   .flashcard .back .row { margin-bottom: 12px; font-size: 15px; line-height: 1.7; }
   .flashcard .back .row b {
-    display: block; color: var(--ink); font-weight: 700; font-size: 11px;
+    display: inline-block; color: var(--ink); font-weight: 700; font-size: 11px;
     opacity: 0.85; border-left: 3px solid var(--line-strong); padding: 2px 8px; margin-bottom: 5px;
   }
-  .flashcard .back .row .row-value { white-space: pre-wrap; padding-left: 2px; }
+  .flashcard .back .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 15px; margin-left: 8px; }
+  .flashcard .back .row .row-value { display: block; white-space: pre-wrap; padding-left: 2px; }
   .swipe-hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
   .review-actions { display: flex; gap: 10px; justify-content: center; margin-top: 6px; flex-wrap: wrap; }
   .review-actions button.forgot { background: var(--hanko); color: #fff; border: none; }
@@ -226,11 +227,12 @@
   .item-detail { border: 1px solid var(--line-strong); border-radius: 2px; padding: 14px 16px; background: var(--paper2); margin-top: -4px; margin-bottom: 8px; }
   .item-detail .row { font-size: 14px; margin-bottom: 12px; line-height: 1.7; }
   .item-detail .row b {
-    display: block; color: var(--ink); font-weight: 700; font-size: 12px;
+    display: inline-block; color: var(--ink); font-weight: 700; font-size: 12px;
     background: var(--paper); border-left: 3px solid var(--line-strong);
     padding: 3px 8px; margin-bottom: 5px; border-radius: 0 2px 2px 0;
   }
-  .item-detail .row .row-value { white-space: pre-wrap; padding-left: 2px; }
+  .item-detail .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 14px; margin-left: 8px; }
+  .item-detail .row .row-value { display: block; white-space: pre-wrap; padding-left: 2px; }
   .item-detail .detail-actions { margin-top: 10px; display: flex; gap: 14px; }
 
   .word-mini-list { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
@@ -835,7 +837,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (!isReverse) html += '<button type="button" class="speak-btn" id="speak-btn" title="발음 듣기">🔊</button>';
     html += '</div>';
     if (state.reviewFlipped){
-      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b><span class="row-value">'+esc(r[1])+'</span></div>'; }).join('') + '</div>';
+      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>'; }).join('') + '</div>';
       html += '<div class="swipe-hint">← 까먹었어요(←키)&nbsp;&nbsp;·&nbsp;&nbsp;기억나요(→키) →</div>';
     }
     html += '</div>';
@@ -1308,7 +1310,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function renderDetail(cat, it){
     var rows = backRowsForDetail(cat, it);
     var html = rows.filter(function(r){ return r[1]; }).map(function(r){
-      return '<div class="row"><b>'+esc(r[0])+'</b><span class="row-value">'+esc(r[1])+'</span></div>';
+      return '<div class="row"><b>'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>';
     }).join('');
     html += '<div class="detail-actions">' +
       '<button class="ghost" data-edit="'+it.id+'" data-cat="'+cat+'">수정</button>' +
@@ -1320,8 +1322,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return sortedReadingGroups(it)
       .filter(function(g){ return g.reading || g.words.length; })
       .map(function(g){
-        var label = (g.type === 'on' ? '음독 ' : '훈독 ') + (g.reading || '');
-        return [label.trim(), formatKanjiWordList(g.words)];
+        return [(g.type === 'on' ? '음독' : '훈독'), formatKanjiWordList(g.words), g.reading || ''];
       });
   }
   // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
