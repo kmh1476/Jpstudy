@@ -156,6 +156,8 @@
     display: inline-block; color: var(--ink); font-weight: 700; font-size: 11px;
     opacity: 0.85; border-left: 3px solid var(--line-strong); padding: 2px 8px; margin-bottom: 5px;
   }
+  .flashcard .back .row b.label-on { color: var(--jade); border-left-color: var(--jade); }
+  .flashcard .back .row b.label-kun { color: var(--indigo); border-left-color: var(--indigo); }
   .flashcard .back .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 15px; margin-left: 8px; }
   .flashcard .back .row .row-value { display: block; white-space: pre-wrap; padding-left: 2px; }
   .swipe-hint { font-size: 11px; color: var(--muted); margin-top: 10px; }
@@ -231,6 +233,8 @@
     background: var(--paper); border-left: 3px solid var(--line-strong);
     padding: 3px 8px; margin-bottom: 5px; border-radius: 0 2px 2px 0;
   }
+  .item-detail .row b.label-on { color: var(--jade); border-left-color: var(--jade); }
+  .item-detail .row b.label-kun { color: var(--indigo); border-left-color: var(--indigo); }
   .item-detail .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 14px; margin-left: 8px; }
   .item-detail .row .row-value { display: block; white-space: pre-wrap; padding-left: 2px; }
   .item-detail .detail-actions { margin-top: 10px; display: flex; gap: 14px; }
@@ -241,6 +245,11 @@
   .reading-group-words { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px 14px; }
   .word-mini-row { display: flex; gap: 6px; align-items: center; }
   .word-mini-row input { flex: 1; padding: 7px 8px; font-size: 14px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--paper); color: var(--ink); min-width: 0; }
+  .word-mini-row textarea.rg-input {
+    flex: 1; padding: 7px 8px; font-size: 14px; border: 1px solid var(--line-strong); border-radius: 2px;
+    background: var(--paper); color: var(--ink); min-width: 0; min-height: 36px; resize: vertical;
+    font-family: inherit; line-height: 1.4;
+  }
   .word-mini-row select { flex: 0 0 72px; padding: 7px 4px; font-size: 13px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--paper); color: var(--ink); }
 
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 20px 0; text-align: center; }
@@ -420,6 +429,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var rank = { on: 0, kun: 1 };
     groups.sort(function(a, b){ return (rank[a.type] || 0) - (rank[b.type] || 0); });
     return groups;
+  }
+  function rowLabelClass(label){
+    if (label === '음독') return ' label-on';
+    if (label === '훈독') return ' label-kun';
+    return '';
   }
   function formatKanjiWordList(words){
     return words.map(function(w){
@@ -863,7 +877,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (!isReverse) html += '<button type="button" class="speak-btn" id="speak-btn" title="발음 듣기">🔊</button>';
     html += '</div>';
     if (state.reviewFlipped){
-      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b>'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>'; }).join('') + '</div>';
+      html += '<div class="back">' + backRows.map(function(r){ return '<div class="row"><b class="'+rowLabelClass(r[0]).trim()+'">'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>'; }).join('') + '</div>';
       html += '<div class="swipe-hint">← 까먹었어요(←키)&nbsp;&nbsp;·&nbsp;&nbsp;기억나요(→키) →</div>';
     }
     html += '</div>';
@@ -1016,9 +1030,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     wrap.innerHTML = groupsArr.map(function(g, gi){
       var wordsHtml = g.words.map(function(w, wi){
         return '<div class="word-mini-row">' +
-          '<input placeholder="단어" data-gi="'+gi+'" data-wi="'+wi+'" data-f="word" class="rg-input" value="'+esc(w.word)+'">' +
-          '<input placeholder="읽기" data-gi="'+gi+'" data-wi="'+wi+'" data-f="reading" class="rg-input" value="'+esc(w.reading)+'">' +
-          '<input placeholder="뜻" data-gi="'+gi+'" data-wi="'+wi+'" data-f="meaning" class="rg-input" value="'+esc(w.meaning)+'">' +
+          '<textarea placeholder="단어" data-gi="'+gi+'" data-wi="'+wi+'" data-f="word" class="rg-input">'+esc(w.word)+'</textarea>' +
+          '<textarea placeholder="읽기" data-gi="'+gi+'" data-wi="'+wi+'" data-f="reading" class="rg-input">'+esc(w.reading)+'</textarea>' +
+          '<textarea placeholder="뜻" data-gi="'+gi+'" data-wi="'+wi+'" data-f="meaning" class="rg-input">'+esc(w.meaning)+'</textarea>' +
           '<button type="button" class="icon-x" data-del-word="'+gi+':'+wi+'">×</button>' +
           '</div>';
       }).join('');
@@ -1028,7 +1042,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
             '<option value="on"'+(g.type==='on'?' selected':'')+'>음독</option>' +
             '<option value="kun"'+(g.type==='kun'?' selected':'')+'>훈독</option>' +
           '</select>' +
-          '<input placeholder="기본 읽기 (예: さん / みっ~)" data-gi="'+gi+'" data-f="reading" class="rg-input" value="'+esc(g.reading)+'">' +
+          '<textarea placeholder="기본 읽기 (예: さん / みっ~)" data-gi="'+gi+'" data-f="reading" class="rg-input">'+esc(g.reading)+'</textarea>' +
           '<button type="button" class="icon-x" data-del-group="'+gi+'" title="이 읽기 전체 삭제">×</button>' +
         '</div>' +
         '<div class="reading-group-words">'+wordsHtml+'</div>' +
@@ -1036,7 +1050,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         '</div>';
     }).join('');
 
-    wrap.querySelectorAll('input.rg-input').forEach(function(inp){
+    wrap.querySelectorAll('textarea.rg-input').forEach(function(inp){
       inp.addEventListener('input', function(){
         var gi = +inp.getAttribute('data-gi'), f = inp.getAttribute('data-f'), wi = inp.getAttribute('data-wi');
         if (wi !== null) groupsArr[gi].words[+wi][f] = inp.value;
@@ -1336,7 +1350,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function renderDetail(cat, it){
     var rows = backRowsForDetail(cat, it);
     var html = rows.filter(function(r){ return r[1]; }).map(function(r){
-      return '<div class="row"><b>'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>';
+      return '<div class="row"><b class="'+rowLabelClass(r[0]).trim()+'">'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+'<span class="row-value">'+esc(r[1])+'</span></div>';
     }).join('');
     html += '<div class="detail-actions">' +
       '<button class="ghost" data-edit="'+it.id+'" data-cat="'+cat+'">수정</button>' +
@@ -1517,6 +1531,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (e.key === 'Enter' && !e.isComposing && e.target.tagName === 'INPUT' &&
         (e.target.type === 'text' || !e.target.type)){
       e.preventDefault();
+      var focusables = Array.prototype.slice.call(form.querySelectorAll('input, textarea, select, button'))
+        .filter(function(el){ return !el.disabled && el.offsetParent !== null; });
+      var idx = focusables.indexOf(e.target);
+      if (idx > -1 && idx < focusables.length - 1) focusables[idx + 1].focus();
     }
   });
 
