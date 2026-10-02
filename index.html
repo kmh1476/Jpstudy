@@ -441,7 +441,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (w.reading) s += '[' + w.reading + ']';
       if (w.meaning) s += ' ' + w.meaning;
       return s;
-    }).join('    ');
+    }).join('\n\n');
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
@@ -725,7 +725,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         rows.push(['모르는 단어', it.unknownWords.map(function(w){
           var s = w.word || ''; if (w.reading) s += '['+w.reading+']'; if (w.meaning) s += ' '+w.meaning;
           return s;
-        }).join('    ')]);
+        }).join('\n')]);
       }
     }
     return rows.filter(function(r){ return r[1] && String(r[1]).trim(); });
@@ -1377,7 +1377,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       rows.push(['모르는 단어', it.unknownWords.map(function(w){
         var s = w.word || ''; if (w.reading) s += '['+w.reading+']'; if (w.meaning) s += ' '+w.meaning;
         return s;
-      }).join('    ')]);
+      }).join('\n')]);
     }
     return rows;
   }
