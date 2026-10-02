@@ -441,7 +441,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (w.reading) s += '[' + w.reading + ']';
       if (w.meaning) s += ' ' + w.meaning;
       return s;
-    }).join('\n\n');
+    }).join('\n');
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
