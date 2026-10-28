@@ -559,6 +559,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderStreakBadge();
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
       }
+      if (d.autoSpeak !== undefined && d.autoSpeak !== state.autoSpeak){
+        state.autoSpeak = !!d.autoSpeak;
+        if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
+      }
       if (d.includeKword !== undefined && d.includeKword !== state.includeKword){
         state.includeKword = !!d.includeKword;
         renderTabs();
@@ -697,9 +701,108 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
     if (changed) pushCategory('kanji');
   }
+  // ---- 되돌리기: 채점하기 직전의 복습 기록(레벨/다음 복습일 등)을 저장해두고 복원 ----
+  function pickSrs(o){ return { box:o.box, next:o.next, wrongCount:o.wrongCount, lastReviewedDate:o.lastReviewedDate }; }
+  function putSrs(o, st){
+    ['box','next','wrongCount','lastReviewedDate'].forEach(function(k){
+      if (st[k] === undefined) delete o[k]; else o[k] = st[k];
+    });
+  }
+  function eachKwordMatch(key, fn){
+    data.kanji.forEach(function(k){
+      ensureNested(k).forEach(function(g){
+        (g.words || []).forEach(function(w){ if (w.word && wordKey(w) === key) fn(w); });
+      });
+    });
+  }
+  function snapshotFor(cur){
+    if (cur.kword){
+      var states = [];
+      eachKwordMatch(cur.key, function(w){ states.push(pickSrs(w)); });
+      return { kword:true, key:cur.key, states:states };
+    }
+    var it = data[cur.cat].find(function(x){ return x.id === cur.item.id; });
+    return { kword:false, cat:cur.cat, id:cur.item.id, state: it ? pickSrs(it) : null };
+  }
+  function restoreSnapshot(snap){
+    if (snap.kword){
+      var i = 0;
+      eachKwordMatch(snap.key, function(w){ if (snap.states[i]) putSrs(w, snap.states[i]); i++; });
+      pushCategory('kanji');
+    } else if (snap.state){
+      var it = data[snap.cat].find(function(x){ return x.id === snap.id; });
+      if (it){ putSrs(it, snap.state); pushCategory(snap.cat); }
+    }
+  }
+  function undoLastReview(){
+    if (!state.reviewQueue || !state.reviewHistory.length) return;
+    var last = state.reviewHistory.pop();
+    restoreSnapshot(last.snap);
+    state.reviewIdx = last.idx;
+    state.reviewFlipped = true;     // 되돌린 카드는 답이 보이는 상태로 돌아와서 바로 다시 채점 가능
+    state.spokenIdx = last.idx;     // 되돌릴 때는 소리 자동 재생 안 함
+    renderReview();
+  }
   function applyReview(cur, remembered){
+    state.reviewHistory.push({ idx: state.reviewIdx, snap: snapshotFor(cur) });
     if (cur.kword) reviewKanjiWord(cur.key, remembered);
     else reviewResult(cur.cat, cur.item.id, remembered);
+  }
+
+  // ---- 백업 내보내기 / 불러오기 ----
+  function exportBackup(){
+    var payload = {
+      app: 'jp-study-note', version: 1, exportedAt: new Date().toISOString(),
+      data: { vocab:data.vocab, kanji:data.kanji, grammar:data.grammar, expr:data.expr },
+      settings: { streak:state.streak, dailyCap:state.dailyCap, includeKword:state.includeKword, autoSpeak:state.autoSpeak }
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = '일본어학습노트_백업_' + todayStr() + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+  function readBackupFile(file){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var obj;
+      try { obj = JSON.parse(reader.result); } catch(e){ alert('백업 파일을 읽을 수 없어요. (JSON 형식이 아니에요)'); return; }
+      var src = obj && obj.data;
+      if (!src || typeof src !== 'object'){ alert('이 앱에서 만든 백업 파일이 아닌 것 같아요.'); return; }
+      var clean = {}, counts = [];
+      Object.keys(CATS).forEach(function(c){
+        var arr = Array.isArray(src[c]) ? src[c] : [];
+        clean[c] = arr.filter(function(x){ return x && typeof x === 'object'; }).map(function(x){
+          if (!x.id) x.id = uid();
+          if (typeof x.box !== 'number') x.box = 0;
+          if (!x.next) x.next = todayStr();
+          if (!x.created) x.created = todayStr();
+          return x;
+        });
+        counts.push(CATS[c].label + ' ' + clean[c].length);
+      });
+      state.pendingImport = { name:file.name, data:clean, counts:counts.join(' · ') };
+      renderReview();
+    };
+    reader.onerror = function(){ alert('파일을 읽는 중 오류가 났어요.'); };
+    reader.readAsText(file);
+  }
+  function applyImport(mode){
+    var p = state.pendingImport;
+    if (!p) return;
+    if (mode === 'replace' && !confirm('지금 데이터가 모두 백업 내용으로 바뀌어요. 정말 덮어쓸까요?')) return;
+    Object.keys(CATS).forEach(function(c){
+      if (mode === 'replace') data[c] = p.data[c];
+      else {
+        var have = {};
+        data[c].forEach(function(it){ have[it.id] = true; });
+        p.data[c].forEach(function(it){ if (!have[it.id]) data[c].push(it); });
+      }
+      pushCategory(c);
+    });
+    state.pendingImport = null;
+    renderAll();
   }
   function bumpStreak(){
     var today = todayStr();
@@ -735,6 +838,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     streak: { count: 0, lastDate: null },
     dailyCap: 30,
     includeKword: false,
+    autoSpeak: true,
+    reviewHistory: [],
+    spokenIdx: -1,
+    pendingImport: null,
     pendingFocusCat: null,
     reviewDirection: 'mixed'
   };
@@ -806,8 +913,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (state.reviewDirection === 'mixed') return Math.random() < 0.5 ? 'normal' : 'reverse';
     return state.reviewDirection;
   }
+  function listenCount(){
+    return data.vocab.length + data.expr.length + (state.includeKword ? kwordList().length : 0);
+  }
   function buildQueue(mode, onlyCat){
     var q = [];
+    if (onlyCat === 'listen'){
+      // 듣기 복습: 단어/표현 (+ 한자 예시 단어를 포함으로 체크했으면 그것도)
+      ['vocab', 'expr'].forEach(function(c){
+        data[c].forEach(function(it){ q.push({ cat:c, item:it, dir:'listen' }); });
+      });
+      if (state.includeKword) kwordList().forEach(function(e){
+        q.push({ cat:'vocab', kword:true, key:e.key, item:kwordToItem(e), dir:'listen' });
+      });
+      return shuffle(q);
+    }
     Object.keys(CATS).forEach(function(c){
       if (onlyCat && c !== onlyCat) return;
       var pool = mode === 'all' ? data[c] : (mode === 'weak' ? weakItems(c) : dueItems(c));
@@ -829,6 +949,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       queue = queue.slice(0, state.dailyCap);
     }
     state.reviewQueue = queue;
+    state.reviewHistory = [];
+    state.spokenIdx = -1;
     state.reviewIdx = 0;
     state.reviewFlipped = false;
     renderReview();
@@ -901,6 +1023,25 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<button data-dir="'+o[0]+'" class="'+(state.reviewDirection===o[0]?'active':'')+'">'+o[1]+'</button>';
       }).join('') + '<span class="direction-label">(한자는 항상 한자→뜻 고정)</span></div>';
   }
+  function renderSpeakToggle(){
+    return '<div class="direction-row"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" id="speak-toggle"'+(state.autoSpeak?' checked':'')+'> 카드가 나오면 소리 자동 재생</label></div>';
+  }
+  function renderBackupRow(){
+    var html = '<div class="direction-row" style="margin-top:18px;"><span class="direction-label">데이터 백업:</span>' +
+      '<button type="button" id="backup-export">⬇ 내보내기</button>' +
+      '<button type="button" id="backup-import-btn">⬆ 불러오기</button>' +
+      '<input type="file" id="backup-file" accept=".json,application/json" style="display:none"></div>';
+    if (state.pendingImport){
+      var p = state.pendingImport;
+      html += '<div class="stats-panel" style="margin-top:10px;"><div style="font-size:13px;margin-bottom:8px;">백업 파일: '+esc(p.name)+' — '+esc(p.counts)+'</div>' +
+        '<div class="review-actions" style="justify-content:flex-start;margin-top:0;">' +
+        '<button type="button" class="secondary" id="import-merge">합치기 (없는 항목만 추가)</button>' +
+        '<button type="button" class="secondary" id="import-replace">전부 덮어쓰기</button>' +
+        '<button type="button" class="ghost" id="import-cancel">취소</button></div></div>';
+    }
+    return html;
+  }
   function renderKwordToggle(){
     var n = kwordList().length;
     if (!n) return '';
@@ -940,6 +1081,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<button class="cat-review-chip '+CATS[c].color+'" data-cat-review="'+c+'">'+CATS[c].label+' <span>'+n+'</span></button>';
       }).join('');
       if (kwTotal) catChips += '<button class="cat-review-chip cat-kanji" data-cat-review="kword">한자 단어 <span>'+kwTotal+'</span></button>';
+      var lc = listenCount();
+      if (lc) catChips += '<button class="cat-review-chip" style="color:var(--ink)" data-cat-review="listen">🎧 듣기 <span>'+lc+'</span></button>';
       var extraButtons = '';
       if (weak > 0) extraButtons += '<button class="secondary" id="start-weak">⚠️ 취약 항목만 복습 ('+weak+'개)</button>';
 
@@ -949,12 +1092,32 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderKwordToggle() +
+        renderSpeakToggle() +
         renderCapRow() +
         renderDirectionRow() +
-        '<div style="margin-top:14px;"><button type="button" class="ghost" id="reset-levels-btn">모든 항목 레벨 초기화</button></div>';
+        '<div style="margin-top:14px;"><button type="button" class="ghost" id="reset-levels-btn">모든 항목 레벨 초기화</button></div>' +
+        renderBackupRow();
 
       var resetBtn = document.getElementById('reset-levels-btn');
       if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
+      var spToggle = document.getElementById('speak-toggle');
+      if (spToggle) spToggle.addEventListener('change', function(){
+        state.autoSpeak = spToggle.checked;
+        if (settingsRef) settingsRef.set({ autoSpeak: state.autoSpeak }, { merge: true }).catch(function(){});
+      });
+      var exBtn = document.getElementById('backup-export');
+      if (exBtn) exBtn.addEventListener('click', exportBackup);
+      var imBtn = document.getElementById('backup-import-btn'), fileEl = document.getElementById('backup-file');
+      if (imBtn && fileEl){
+        imBtn.addEventListener('click', function(){ fileEl.value = ''; fileEl.click(); });
+        fileEl.addEventListener('change', function(){ if (fileEl.files && fileEl.files[0]) readBackupFile(fileEl.files[0]); });
+      }
+      var mergeBtn = document.getElementById('import-merge');
+      if (mergeBtn) mergeBtn.addEventListener('click', function(){ applyImport('merge'); });
+      var replaceBtn = document.getElementById('import-replace');
+      if (replaceBtn) replaceBtn.addEventListener('click', function(){ applyImport('replace'); });
+      var cancelImp = document.getElementById('import-cancel');
+      if (cancelImp) cancelImp.addEventListener('click', function(){ state.pendingImport = null; renderReview(); });
       var kwToggle = document.getElementById('kword-toggle');
       if (kwToggle) kwToggle.addEventListener('change', function(){
         state.includeKword = kwToggle.checked;
@@ -988,9 +1151,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var remainingAll = totalAll();
       panel.innerHTML = '<div class="review-done"><h3 class="serif">복습 끝!</h3><p>수고하셨어요.</p>' +
         '<div class="review-actions">' +
+        (state.reviewHistory.length ? '<button class="secondary" id="undo-btn">↩ 마지막 카드 되돌리기</button>' : '') +
         (remainingAll > 0 ? '<button class="secondary" id="continue-all">전체 항목으로 이어서 복습</button>' : '') +
         '<button class="secondary" id="back-summary">돌아가기</button>' +
         '</div></div>';
+      var doneUndo = document.getElementById('undo-btn');
+      if (doneUndo) doneUndo.addEventListener('click', undoLastReview);
       var contBtn = document.getElementById('continue-all');
       if (contBtn) contBtn.addEventListener('click', function(){ startReview('all'); });
       document.getElementById('back-summary').addEventListener('click', function(){ state.reviewQueue = null; renderReview(); renderTabs(); });
@@ -999,10 +1165,16 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var cur = state.reviewQueue[state.reviewIdx];
     var cat = cur.cat, it = cur.item;
     var isReverse = cur.dir === 'reverse';
+    var isListen = cur.dir === 'listen';
     var term = it[TITLE_KEY[cat]] || '';
     var front, backRows, tagLabel, speakText;
 
-    if (isReverse){
+    if (isListen){
+      front = '🎧';
+      tagLabel = CATS[cat].label + ' · 듣기';
+      speakText = it.reading || term;
+      backRows = [[TITLE_LABEL[cat], term]].concat(backRowsFor(cat, it));
+    } else if (isReverse){
       front = it.meaning || '';
       tagLabel = CATS[cat].label + ' · 뜻→일본어';
       speakText = term;
@@ -1015,7 +1187,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       speakText = term;
       backRows = backRowsFor(cat, it);
     }
-    if (cur.kword) tagLabel = '한자 단어' + (isReverse ? ' · 뜻→일본어' : '');
+    if (cur.kword) tagLabel = '한자 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : ''));
     var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
 
     var html = '<div style="text-align:right;color:var(--muted);font-size:13px;margin-bottom:6px;">'+progress+'</div>';
@@ -1031,6 +1203,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     html += !state.reviewFlipped
       ? '<div class="review-actions"><button class="primary" id="flip-btn">답 보기</button></div><div class="swipe-hint">스페이스바로도 답을 볼 수 있어요</div>'
       : '<div class="review-actions"><button class="forgot" id="forgot-btn">까먹었어요</button><button class="remembered" id="remember-btn">기억나요</button></div>';
+    if (state.reviewHistory.length) html += '<div class="review-actions" style="margin-top:10px;"><button type="button" class="secondary" id="undo-btn">↩ 직전 카드 되돌리기 (Z키)</button></div>';
     panel.innerHTML = html;
 
     var speakBtn = document.getElementById('speak-btn');
@@ -1038,6 +1211,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       speakBtn.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
       speakBtn.addEventListener('click', function(e){ e.stopPropagation(); speakJapanese(speakText); });
     }
+    // 새 카드가 나오면 소리 자동 재생 (정답이 되는 뒷면 방향·한자 카드는 제외, 듣기 복습은 항상)
+    if (state.autoSpeak && !state.reviewFlipped && state.spokenIdx !== state.reviewIdx){
+      state.spokenIdx = state.reviewIdx;
+      if (!isReverse && (cat !== 'kanji')) speakJapanese(speakText);
+    }
+    var undoBtn = document.getElementById('undo-btn');
+    if (undoBtn) undoBtn.addEventListener('click', undoLastReview);
     var flipBtn = document.getElementById('flip-btn');
     if (flipBtn) flipBtn.addEventListener('click', function(){ state.reviewFlipped = true; renderReview(); });
     function advance(remembered){ applyReview(cur, remembered); state.reviewIdx += 1; state.reviewFlipped = false; renderReview(); }
@@ -1693,6 +1873,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var tag = document.activeElement && document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    if (e.code === 'KeyZ' || e.key === 'Backspace'){
+      e.preventDefault();
+      undoLastReview();
+      return;
+    }
     if (e.code === 'Space' || e.key === ' '){
       if (!state.reviewFlipped){
         e.preventDefault();
