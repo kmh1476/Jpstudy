@@ -559,6 +559,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderStreakBadge();
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
       }
+      if (d.includeKword !== undefined && d.includeKword !== state.includeKword){
+        state.includeKword = !!d.includeKword;
+        renderTabs();
+        if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
+      }
       if (d.dailyCap !== undefined && d.dailyCap !== state.dailyCap){
         state.dailyCap = d.dailyCap;
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
@@ -654,8 +659,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     };
   }
 
-  function totalDue(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + dueCount(c); }, 0) + kwordDue().length; }
-  function totalAll(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + data[c].length; }, 0) + kwordList().length; }
+  function totalDue(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + dueCount(c); }, 0) + (state.includeKword ? kwordDue().length : 0); }
+  function totalAll(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + data[c].length; }, 0) + (state.includeKword ? kwordList().length : 0); }
   function reviewResult(cat, id, remembered){
     var it = data[cat].find(function(x){ return x.id === id; });
     if (!it) return;
@@ -729,6 +734,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     page: { vocab:1, kanji:1, grammar:1, expr:1 },
     streak: { count: 0, lastDate: null },
     dailyCap: 30,
+    includeKword: false,
     pendingFocusCat: null,
     reviewDirection: 'mixed'
   };
@@ -790,7 +796,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   function isWeak(it){ return (it.wrongCount || 0) >= WEAK_THRESHOLD; }
   function weakItems(cat){ return data[cat].filter(isWeak); }
-  function totalWeak(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + weakItems(c).length; }, 0) + kwordWeak().length; }
+  function totalWeak(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + weakItems(c).length; }, 0) + (state.includeKword ? kwordWeak().length : 0); }
 
   function shuffle(arr){
     for (var i = arr.length - 1; i > 0; i--){ var j = Math.floor(Math.random()*(i+1)); var tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp; }
@@ -809,7 +815,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       pool.forEach(function(it){ q.push({ cat: c, item: it, dir: c === 'kanji' ? 'normal' : pickDirection() }); });
     });
     // 한자 예시 단어들도 단어 복습처럼 섞어서 출제 (뜻이 없는 단어는 일본어→뜻 방향으로만).
-    if (!onlyCat || onlyCat === 'kword'){
+    if ((!onlyCat && state.includeKword) || onlyCat === 'kword'){
       var kl = mode === 'all' ? kwordList() : (mode === 'weak' ? kwordWeak() : kwordDue());
       kl.forEach(function(e){
         q.push({ cat: 'vocab', kword: true, key: e.key, item: kwordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
@@ -873,7 +879,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     Object.keys(CATS).forEach(function(c){
       data[c].forEach(function(it){ levels[it.box || 0]++; total++; });
     });
-    kwordList().forEach(function(e){ levels[e.w.box || 0]++; total++; });
+    if (state.includeKword) kwordList().forEach(function(e){ levels[e.w.box || 0]++; total++; });
     var streakHtml = state.streak.count > 0
       ? '<span class="streak-inline">🔥 연속 '+state.streak.count+'일째</span>' : '';
     if (!total) return streakHtml ? '<div class="stats-panel">'+streakHtml+'</div>' : '';
@@ -895,6 +901,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<button data-dir="'+o[0]+'" class="'+(state.reviewDirection===o[0]?'active':'')+'">'+o[1]+'</button>';
       }).join('') + '<span class="direction-label">(한자는 항상 한자→뜻 고정)</span></div>';
   }
+  function renderKwordToggle(){
+    var n = kwordList().length;
+    if (!n) return '';
+    return '<div class="direction-row"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" id="kword-toggle"'+(state.includeKword?' checked':'')+'> 한자 예시 단어도 복습에 포함 ' +
+      '<span class="direction-label">(총 '+n+'개)</span></label></div>';
+  }
   function renderCapRow(){
     var opts = [20, 30, 50, 'all'];
     return '<div class="direction-row"><span class="direction-label">오늘 복습량:</span>' +
@@ -912,12 +925,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<div class="review-card"><div class="n '+CATS[c].color+'">'+dueCount(c)+'</div><div class="label">'+CATS[c].label+' 복습</div></div>';
       }).join('');
       var kwTotal = kwordList().length;
-      if (kwTotal) summaryHtml += '<div class="review-card"><div class="n cat-kanji">'+kwordDue().length+'</div><div class="label">한자 단어 복습</div></div>';
+      if (kwTotal && state.includeKword) summaryHtml += '<div class="review-card"><div class="n cat-kanji">'+kwordDue().length+'</div><div class="label">한자 단어 복습</div></div>';
       var due = totalDue(), all = totalAll(), weak = totalWeak();
       var dueForToday = (state.dailyCap !== 'all' && due > state.dailyCap) ? state.dailyCap : due;
       var buttons = '';
       if (due > 0){
-        var dueLabel = (dueForToday < due) ? (dueForToday+'개 · 오늘 밀린 건 총 '+due+'개') : (due+'개');
+        var dueLabel = dueForToday+'개';
         buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+dueLabel+')</button>';
       }
       if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
@@ -935,12 +948,20 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
+        renderKwordToggle() +
         renderCapRow() +
         renderDirectionRow() +
         '<div style="margin-top:14px;"><button type="button" class="ghost" id="reset-levels-btn">모든 항목 레벨 초기화</button></div>';
 
       var resetBtn = document.getElementById('reset-levels-btn');
       if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
+      var kwToggle = document.getElementById('kword-toggle');
+      if (kwToggle) kwToggle.addEventListener('change', function(){
+        state.includeKword = kwToggle.checked;
+        if (settingsRef) settingsRef.set({ includeKword: state.includeKword }, { merge: true }).catch(function(){});
+        renderTabs();
+        renderReview();
+      });
       var dueBtn = document.getElementById('start-due');
       if (dueBtn) dueBtn.addEventListener('click', function(){ startReview('due'); });
       var allBtn = document.getElementById('start-all');
