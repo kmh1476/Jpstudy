@@ -71,28 +71,24 @@
   #login-screen { max-width: 380px; margin: 60px auto; padding: 0 18px; }
 
   header.top { margin-bottom: 20px; position: relative; padding-top: 4px; }
-  header.top .title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-right: 130px; }
+  header.top .title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-right: 50px; }
   header.top h1 { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: 0.01em; }
   header.top .stamp {
     display: inline-block; border: 2px solid var(--hanko); color: var(--hanko);
     font-size: 12px; padding: 2px 8px; border-radius: 2px; transform: rotate(-4deg);
     font-family: 'Noto Serif JP', serif; font-weight: 700;
   }
-  header.top p.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; padding-right: 130px; }
+  header.top p.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; padding-right: 50px; }
   .sync-badge { color: var(--muted); font-size: 12px; display: block; margin-top: 4px; cursor: help; }
   .logout-row { margin-top: 6px; }
   .logout-row button { font-size: 12px; }
 
-  .theme-row { position: absolute; top: 2px; right: 0; display: flex; align-items: center; gap: 5px; }
+  .theme-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .theme-dot {
     width: 15px; height: 15px; border-radius: 50%; border: 2px solid transparent;
     cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
   }
   .theme-dot.active { border-color: var(--ink); transform: scale(1.25); }
-  @media (max-width: 560px) {
-    header.top .title-row, header.top p.sub { padding-right: 0; }
-    .theme-row { position: static; margin-top: 8px; justify-content: flex-start; }
-  }
 
   nav.tabs { display: flex; gap: 4px; margin-top: 16px; flex-wrap: wrap; border-bottom: 2px solid var(--line-strong); padding-bottom: 0; }
   nav.tabs button {
@@ -282,6 +278,17 @@
   .ai-err { color: var(--hanko); }
   .ai-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
 
+  .settings-gear { position: absolute; top: 2px; right: 0; background: var(--paper2); border: 1px solid var(--line-strong); border-radius: 50%; width: 38px; height: 38px; font-size: 18px; line-height: 1; cursor: pointer; padding: 0; }
+  .settings-gear:hover { background: var(--paper-card); }
+  #settings-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,0.45); z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 40px 14px; overflow-y: auto; }
+  .settings-box { width: 100%; max-width: 520px; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 4px; padding: 20px 22px 24px; }
+  .settings-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .settings-head h2 { margin: 0; font-size: 20px; }
+  .settings-section { border-top: 1px dashed var(--line-strong); padding: 14px 0 4px; margin-top: 14px; }
+  .settings-section h3 { margin: 0 0 8px; font-size: 14px; }
+  .settings-box .theme-dot { width: 26px; height: 26px; }
+  .settings-help { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
 
@@ -321,8 +328,7 @@
     <p class="sub">단어 · 한자 · 문법 · 표현 — 매일 쓰고, 때 되면 다시 꺼내보기</p>
     <span class="sync-badge" id="sync-badge" title="Firebase Firestore에 실시간으로 저장돼요.">☁️ 동기화됨</span>
     <span class="sync-badge" id="streak-badge"></span>
-    <div class="logout-row"><button class="ghost" id="logout-btn">로그아웃</button></div>
-    <div class="theme-row" id="theme-row"></div>
+    <button type="button" class="settings-gear" id="settings-btn" title="설정" aria-label="설정">⚙️</button>
     <nav class="tabs" id="tabs"></nav>
   </header>
 
@@ -331,6 +337,16 @@
   <section class="panel hidden" id="panel-kanji"></section>
   <section class="panel hidden" id="panel-grammar"></section>
   <section class="panel hidden" id="panel-expr"></section>
+</div>
+
+<div id="settings-overlay" class="hidden">
+  <div class="settings-box" role="dialog" aria-label="설정">
+    <div class="settings-head">
+      <h2 class="serif">설정</h2>
+      <button type="button" class="secondary" id="settings-close">닫기</button>
+    </div>
+    <div id="settings-body"></div>
+  </div>
 </div>
 
 <script>
@@ -574,7 +590,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var aiChanged = false;
       if (d.aiKey !== undefined && (d.aiKey || '') !== state.aiKey){ state.aiKey = d.aiKey || ''; aiChanged = true; }
       if (d.aiModel && d.aiModel !== state.aiModel){ state.aiModel = d.aiModel; aiChanged = true; }
-      if (aiChanged && state.activeTab === 'review' && !state.reviewQueue) renderReview();
+      if (aiChanged) renderSettings();
       if (d.autoSpeak !== undefined && d.autoSpeak !== state.autoSpeak){
         state.autoSpeak = !!d.autoSpeak;
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
@@ -800,7 +816,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         counts.push(CATS[c].label + ' ' + clean[c].length);
       });
       state.pendingImport = { name:file.name, data:clean, counts:counts.join(' · ') };
-      renderReview();
+      renderSettings();
     };
     reader.onerror = function(){ alert('파일을 읽는 중 오류가 났어요.'); };
     reader.readAsText(file);
@@ -820,6 +836,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
     state.pendingImport = null;
     renderAll();
+    renderSettings();
   }
   function bumpStreak(){
     var today = todayStr();
@@ -858,6 +875,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     autoSpeak: true,
     reviewHistory: [],
     spokenIdx: -1,
+    settingsOpen: false,
     pendingImport: null,
     aiKey: '',
     aiModel: 'gemini-flash-latest',
@@ -1047,7 +1065,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<input type="checkbox" id="speak-toggle"'+(state.autoSpeak?' checked':'')+'> 카드가 나오면 소리 자동 재생</label></div>';
   }
   function renderBackupRow(){
-    var html = '<div class="direction-row" style="margin-top:18px;"><span class="direction-label">데이터 백업:</span>' +
+    var html = '<div class="direction-row" style="margin-top:0;">' +
       '<button type="button" id="backup-export">⬇ 내보내기</button>' +
       '<button type="button" id="backup-import-btn">⬆ 불러오기</button>' +
       '<input type="file" id="backup-file" accept=".json,application/json" style="display:none"></div>';
@@ -1113,48 +1131,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderKwordToggle() +
         renderSpeakToggle() +
         renderCapRow() +
-        renderDirectionRow() +
-        '<div style="margin-top:14px;"><button type="button" class="ghost" id="reset-levels-btn">모든 항목 레벨 초기화</button></div>' +
-        renderBackupRow() +
-        renderAiSettingsRow();
+        renderDirectionRow();
 
-      var resetBtn = document.getElementById('reset-levels-btn');
-      if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
-      var aiKeyBtn = document.getElementById('ai-key-btn');
-      if (aiKeyBtn) aiKeyBtn.addEventListener('click', function(){
-        var k = prompt('Gemini API 키를 입력해 주세요.', '');
-        if (k && k.trim()){ saveAiSettings(k.trim(), state.aiModel); renderReview(); }
-      });
-      var aiKeyDel = document.getElementById('ai-key-del');
-      if (aiKeyDel) aiKeyDel.addEventListener('click', function(){
-        if (!confirm('저장된 AI 키를 삭제할까요?')) return;
-        state.aiKey = '';
-        if (settingsRef) settingsRef.set({ aiKey: firebase.firestore.FieldValue.delete() }, { merge: true }).catch(function(){});
-        renderReview();
-      });
-      var aiModelBtn = document.getElementById('ai-model-btn');
-      if (aiModelBtn) aiModelBtn.addEventListener('click', function(){
-        var m = prompt('사용할 Gemini 모델 이름', state.aiModel);
-        if (m && m.trim()){ saveAiSettings(state.aiKey, m.trim()); renderReview(); }
-      });
       var spToggle = document.getElementById('speak-toggle');
       if (spToggle) spToggle.addEventListener('change', function(){
         state.autoSpeak = spToggle.checked;
         if (settingsRef) settingsRef.set({ autoSpeak: state.autoSpeak }, { merge: true }).catch(function(){});
       });
-      var exBtn = document.getElementById('backup-export');
-      if (exBtn) exBtn.addEventListener('click', exportBackup);
-      var imBtn = document.getElementById('backup-import-btn'), fileEl = document.getElementById('backup-file');
-      if (imBtn && fileEl){
-        imBtn.addEventListener('click', function(){ fileEl.value = ''; fileEl.click(); });
-        fileEl.addEventListener('change', function(){ if (fileEl.files && fileEl.files[0]) readBackupFile(fileEl.files[0]); });
-      }
-      var mergeBtn = document.getElementById('import-merge');
-      if (mergeBtn) mergeBtn.addEventListener('click', function(){ applyImport('merge'); });
-      var replaceBtn = document.getElementById('import-replace');
-      if (replaceBtn) replaceBtn.addEventListener('click', function(){ applyImport('replace'); });
-      var cancelImp = document.getElementById('import-cancel');
-      if (cancelImp) cancelImp.addEventListener('click', function(){ state.pendingImport = null; renderReview(); });
       var kwToggle = document.getElementById('kword-toggle');
       if (kwToggle) kwToggle.addEventListener('change', function(){
         state.includeKword = kwToggle.checked;
@@ -1464,8 +1447,72 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       });
     });
   }
+  function openSettings(){
+    state.settingsOpen = true;
+    document.getElementById('settings-overlay').classList.remove('hidden');
+    renderSettings();
+  }
+  function closeSettings(){
+    state.settingsOpen = false;
+    var ov = document.getElementById('settings-overlay');
+    if (ov) ov.classList.add('hidden');
+  }
+  function renderSettings(){
+    var body = document.getElementById('settings-body');
+    if (!body || !state.settingsOpen) return;
+    body.innerHTML =
+      '<div class="settings-section"><h3>테마 색</h3><div class="theme-row" id="theme-row"></div></div>' +
+      '<div class="settings-section"><h3>🤖 AI 검수</h3>' + renderAiSettingsRow() +
+        '<div class="settings-help">나만의 문장 칸의 "AI 검수" 버튼에 쓰는 Gemini API 키와 모델이에요.</div></div>' +
+      '<div class="settings-section"><h3>데이터 백업</h3>' + renderBackupRow() +
+        '<div class="settings-help">내보내기로 받은 JSON 파일을 불러오기로 다시 가져올 수 있어요. (AI 키는 백업에 포함되지 않아요)</div></div>' +
+      '<div class="settings-section"><h3>기타</h3><div class="direction-row" style="margin-top:0;">' +
+        '<button type="button" id="reset-levels-btn">모든 항목 레벨 초기화</button>' +
+        '<button type="button" id="logout-btn">로그아웃</button></div></div>';
+    renderThemeRow();
+    bindSettings(body);
+  }
+  function bindSettings(root){
+    function $(id){ return root.querySelector('#' + id); }
+    var resetBtn = $('reset-levels-btn');
+    if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
+    var logoutBtn = $('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', function(){ closeSettings(); auth.signOut(); });
+
+    var aiKeyBtn = $('ai-key-btn');
+    if (aiKeyBtn) aiKeyBtn.addEventListener('click', function(){
+      var k = prompt('Gemini API 키를 입력해 주세요.', '');
+      if (k && k.trim()){ saveAiSettings(k.trim(), state.aiModel); renderSettings(); }
+    });
+    var aiKeyDel = $('ai-key-del');
+    if (aiKeyDel) aiKeyDel.addEventListener('click', function(){
+      if (!confirm('저장된 AI 키를 삭제할까요?')) return;
+      state.aiKey = '';
+      if (settingsRef) settingsRef.set({ aiKey: firebase.firestore.FieldValue.delete() }, { merge: true }).catch(function(){});
+      renderSettings();
+    });
+    var aiModelBtn = $('ai-model-btn');
+    if (aiModelBtn) aiModelBtn.addEventListener('click', function(){
+      var m = prompt('사용할 Gemini 모델 이름', state.aiModel);
+      if (m && m.trim()){ saveAiSettings(state.aiKey, m.trim()); renderSettings(); }
+    });
+
+    var exBtn = $('backup-export');
+    if (exBtn) exBtn.addEventListener('click', exportBackup);
+    var imBtn = $('backup-import-btn'), fileEl = $('backup-file');
+    if (imBtn && fileEl){
+      imBtn.addEventListener('click', function(){ fileEl.value = ''; fileEl.click(); });
+      fileEl.addEventListener('change', function(){ if (fileEl.files && fileEl.files[0]) readBackupFile(fileEl.files[0]); });
+    }
+    var mergeBtn = $('import-merge');
+    if (mergeBtn) mergeBtn.addEventListener('click', function(){ applyImport('merge'); });
+    var replaceBtn = $('import-replace');
+    if (replaceBtn) replaceBtn.addEventListener('click', function(){ applyImport('replace'); });
+    var cancelImp = $('import-cancel');
+    if (cancelImp) cancelImp.addEventListener('click', function(){ state.pendingImport = null; renderSettings(); });
+  }
   function renderAiSettingsRow(){
-    return '<div class="direction-row" style="margin-top:14px;"><span class="direction-label">🤖 AI 검수 설정:</span>' +
+    return '<div class="direction-row" style="margin-top:0;">' +
       '<span class="direction-label">' + (state.aiKey ? '키 저장됨' : '키 없음') + '</span>' +
       '<button type="button" id="ai-key-btn">' + (state.aiKey ? '키 변경' : '키 입력') + '</button>' +
       (state.aiKey ? '<button type="button" id="ai-key-del">키 삭제</button>' : '') +
@@ -1975,6 +2022,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     document.getElementById('app').style.display = 'block';
   }
   function showLogin(){
+    closeSettings();
     document.getElementById('login-screen').style.display = 'block';
     document.getElementById('app').style.display = 'none';
   }
@@ -1992,8 +2040,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     setLoginError('');
     auth.createUserWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
   });
-  document.getElementById('logout-btn').addEventListener('click', function(){
-    auth.signOut();
+  document.getElementById('settings-btn').addEventListener('click', openSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  document.getElementById('settings-overlay').addEventListener('click', function(e){
+    if (e.target === this) closeSettings();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && state.settingsOpen) closeSettings();
   });
 
   // 단어/한자/문형 등 입력칸에서 (특히 한글·일본어 입력 중 엔터로 조합을
@@ -2020,6 +2073,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   // 복습 중 키보드 단축키: 스페이스바 = 답 보기, ← = 까먹었어요, → = 기억나요.
   document.addEventListener('keydown', function(e){
+    if (state.settingsOpen) return;
     if (state.activeTab !== 'review' || !state.reviewQueue) return;
     if (state.reviewIdx >= state.reviewQueue.length) return;
     var tag = document.activeElement && document.activeElement.tagName;
