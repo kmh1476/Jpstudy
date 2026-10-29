@@ -1484,6 +1484,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var fields = FIELD_DEFS[cat];
     var firstHtml = fieldRowHtml(prefix, fields[0], existing ? existing[fields[0].key] : '');
     var warningHtml = '<div class="full dup-warning" id="'+prefix+'-dup-warning"></div>';
+    var topicHtml = '';   // 주제 칸은 항상 맨 앞에 보여줌 (문형/표현보다 먼저)
     var restHtml = fields.slice(1).map(function(f){
       var val = existing ? existing[f.key] : '';
       if (!existing && f.key === 'topic') val = (state.lastTopic && state.lastTopic[cat]) || '';
@@ -1493,9 +1494,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
           '<datalist id="topic-list-'+prefix+'">' + topicList(cat).map(function(t){ return '<option value="'+esc(t)+'">'; }).join('') + '</datalist>';
       }
       if (f.key === 'mySentence') h += aiBoxHtml(prefix);
+      if (f.key === 'topic'){ topicHtml = h; return ''; }
       return h;
     }).join('');
-    return firstHtml + warningHtml + restHtml;
+    return topicHtml + firstHtml + warningHtml + restHtml;
   }
   function readFormFields(cat, prefix){
     var out = {};
