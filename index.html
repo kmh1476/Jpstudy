@@ -301,7 +301,6 @@
   .ew-list { display: flex; flex-direction: column; gap: 4px; }
   .ew-add { align-self: flex-start; font-size: 12px; padding: 0; }
   .expr-set-no { font-size: 12px; color: var(--muted); width: 20px; flex-shrink: 0; text-align: center; }
-  .conj-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: -4px; }
   .save-msg { color: var(--jade); font-weight: 700; font-size: 13px; }
 
   .global-search { position: relative; margin-top: 10px; }
@@ -1481,19 +1480,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<'+tag+' id="'+id+'"'+(field.type==='textarea'?'':' type="text"')+valueAttr+'>'+inner+'</'+tag+'>' +
       '</div>';
   }
-  // 문법 '접속 형태' 빠른 입력: 누르면 "명사의 보통체형: " 같은 줄이 접속 형태 칸에 들어가요.
-  var CONJ_PRESETS = [
-    ['명사 보통체','명사의 보통체형'], ['명사 정중체','명사의 정중체형'],
-    ['な형 보통체','な형용사의 보통체형'], ['な형 정중체','な형용사의 정중체형'],
-    ['い형 보통체','い형용사의 보통체형'], ['い형 정중체','い형용사의 정중체형'],
-    ['동사 보통체','동사의 보통체형'], ['동사 정중체','동사의 정중체형']
-  ];
-  function conjChipsHtml(){
-    return '<div class="full conj-chips"><span class="direction-label">빠른 입력:</span>' +
-      CONJ_PRESETS.map(function(c){
-        return '<button type="button" class="kana-chip" tabindex="-1" data-conj-insert="'+esc(c[1])+'">'+esc(c[0])+'</button>';
-      }).join('') + '</div>';
-  }
   function generateFormFields(cat, prefix, existing){
     var fields = FIELD_DEFS[cat];
     var firstHtml = fieldRowHtml(prefix, fields[0], existing ? existing[fields[0].key] : '');
@@ -1506,7 +1492,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         h = h.replace('<input ', '<input list="topic-list-'+prefix+'" autocomplete="off" placeholder="주제 (이어서 쓰면 자동으로 채워져요)" ') +
           '<datalist id="topic-list-'+prefix+'">' + topicList(cat).map(function(t){ return '<option value="'+esc(t)+'">'; }).join('') + '</datalist>';
       }
-      if (f.key === 'conjugation') h += conjChipsHtml();
       if (f.key === 'mySentence') h += aiBoxHtml(prefix);
       return h;
     }).join('');
@@ -2495,19 +2480,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     auth.createUserWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
   });
   document.getElementById('settings-btn').addEventListener('click', openSettings);
-  // 문법 '접속 형태' 빠른 입력 버튼 (입력 폼/수정 폼 공통)
-  document.addEventListener('click', function(e){
-    var b = e.target.closest && e.target.closest('[data-conj-insert]');
-    if (!b) return;
-    var form = b.closest('form.entry');
-    var ta = form && form.querySelector('textarea[id$="-conjugation"]');
-    if (!ta) return;
-    var v = ta.value;
-    if (v && !/\n$/.test(v)) v += '\n';
-    ta.value = v + b.getAttribute('data-conj-insert') + ': ';
-    ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-  });
   var gsInput = document.getElementById('global-search');
   gsInput.addEventListener('input', renderGlobalResults);
   gsInput.addEventListener('focus', function(){ if (gsInput.value.trim()) renderGlobalResults(); });
