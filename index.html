@@ -217,10 +217,11 @@
 
   .item-list { display: flex; flex-direction: column; gap: 8px; }
   .item-row { border: 1px solid var(--line-strong); border-radius: 2px; padding: 12px 14px; background: var(--paper); display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; flex-wrap: wrap; }
-  .item-row .main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; letter-spacing: 0.02em; white-space: pre-wrap; }
-  .item-row .reading { color: var(--muted); font-size: 14px; white-space: pre-wrap; }
-  .item-row .meaning { color: var(--ink); font-size: 14px; white-space: pre-wrap; }
+  /* 문형/읽기/의미가 여러 줄일 때 줄이 서로 맞도록: 위쪽 정렬 + 모두 같은 줄 높이(28px) 사용 */
+  .item-row .main { display: flex; align-items: flex-start; gap: 2px 12px; flex-wrap: wrap; }
+  .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; line-height: 28px; letter-spacing: 0.02em; white-space: pre-wrap; }
+  .item-row .reading { color: var(--muted); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
+  .item-row .meaning { color: var(--ink); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
   .item-row .meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
   .box-chip { color: var(--jade); font-weight: 700; font-size: 11px; border-bottom: 1px solid var(--jade); padding-bottom: 1px; }
   .due-chip { display: inline-block; background: var(--hanko); color: #fff; padding: 2px 7px; border-radius: 2px; font-size: 11px; font-weight: 700; transform: rotate(-2deg); }
@@ -424,11 +425,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       { key:'meaning', label:'뜻', type:'textarea' },
       { key:'note', label:'비고', type:'textarea', full:true }
     ],
+    // 입력 순서: 주제 → 문형 → 의미 → 접속 형태 → 예문 ...
+    // (폼에서는 '주제' 칸이 항상 맨 앞에 나오고, 나머지는 아래 순서대로 나옴)
     grammar: [
       { key:'pattern', label:'문형', type:'textarea' },
       { key:'topic', label:'주제', type:'text' },
+      { key:'meaning', label:'의미', type:'textarea' },
       { key:'conjugation', label:'접속 형태', type:'textarea', full:true },
-      { key:'meaning', label:'의미', type:'textarea', full:true },
       { key:'example', label:'예문', type:'textarea', full:true },
       { key:'note', label:'비고', type:'textarea', full:true },
       { key:'mySentence', label:'나만의 문장 (검수 완료본)', type:'textarea', full:true }
@@ -547,7 +550,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return '<div class="row"><b class="'+rowLabelClass(r[0]).trim()+'">'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+valueHtml+'</div>';
   }
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
-  var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
+  var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:null, expr:null };
   var ADD_LABEL = { vocab:'단어 추가', kanji:'한자 추가', grammar:'문법 추가', expr:'표현 추가' };
 
   var TOPIC_CATS = ['expr', 'grammar'];
@@ -986,7 +989,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     aiKey: '',
     aiModel: 'gemini-flash-latest',
     pendingFocusCat: null,
-    reviewDirection: 'mixed'
+    reviewDirection: 'mixed',
+    topicReviewOpen: false
   };
 
   function initialTheme(){
@@ -1277,9 +1281,20 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<button class="cat-review-chip '+CATS[c].color+'" data-cat-review="'+c+'">'+CATS[c].label+' <span>'+n+'</span></button>';
       }).join('');
       if (kwTotal) catChips += '<button class="cat-review-chip cat-kanji" data-cat-review="kword">한자 단어 <span>'+kwTotal+'</span></button>';
-      var topicChips = reviewTopicList().map(function(t){
-        return '<button class="cat-review-chip '+(t.cat === 'grammar' ? 'cat-grammar' : 'cat-expr')+'" data-cat-review="topic:'+t.cat+':'+esc(t.name)+'">'+(t.cat === 'grammar' ? '📗 ' : '📘 ')+esc(t.name)+' <span>'+t.count+'</span></button>';
-      }).join('');
+      var topics = reviewTopicList();
+      var topicBlock = '';
+      if (topics.length){
+        // 주제별 복습: 평소에는 접혀 있다가, 버튼을 누르면 주제 목록이 펼쳐짐
+        var topicChips = topics.map(function(t){
+          return '<button class="cat-review-chip '+(t.cat === 'grammar' ? 'cat-grammar' : 'cat-expr')+'" data-cat-review="topic:'+t.cat+':'+esc(t.name)+'">'+(t.cat === 'grammar' ? '📗 ' : '📘 ')+esc(t.name)+' <span>'+t.count+'</span></button>';
+        }).join('');
+        topicBlock = '<div class="cat-review-block">' +
+          '<button type="button" class="cat-review-chip" style="color:var(--ink)" id="topic-review-toggle">📚 주제별 복습 '+(state.topicReviewOpen ? '▴' : '▾')+' <span>'+topics.length+'</span></button>' +
+          (state.topicReviewOpen
+            ? '<div class="cat-review-label" style="margin-top:8px;">📘 표현 + 표현 속 모르는 단어 · 📗 문법</div><div class="cat-review-row">'+topicChips+'</div>'
+            : '') +
+          '</div>';
+      }
       var lc = listenCount();
       if (lc) catChips += '<button class="cat-review-chip" style="color:var(--ink)" data-cat-review="listen">🎧 듣기 <span>'+lc+'</span></button>';
       var extraButtons = '';
@@ -1289,7 +1304,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         '<div class="review-summary">'+summaryHtml+'</div>' +
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
-        (topicChips ? '<div class="cat-review-block"><div class="cat-review-label">주제별 복습 (📘 표현 + 표현 속 모르는 단어 · 📗 문법)</div><div class="cat-review-row">'+topicChips+'</div></div>' : '') +
+        topicBlock +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderKwordToggle() +
         renderEwordToggle() +
@@ -1297,6 +1312,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderCapRow() +
         renderDirectionRow();
 
+      var topicToggle = document.getElementById('topic-review-toggle');
+      if (topicToggle) topicToggle.addEventListener('click', function(){
+        state.topicReviewOpen = !state.topicReviewOpen;
+        renderReview();
+      });
       var spToggle = document.getElementById('speak-toggle');
       if (spToggle) spToggle.addEventListener('change', function(){
         state.autoSpeak = spToggle.checked;
@@ -1378,9 +1398,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       speakText = term;
       backRows = backRowsFor(cat, it);
     }
-    if (!cur.kword && it.topic && (cat === 'expr' || cat === 'vocab' || cat === 'grammar')) tagLabel += ' · ' + it.topic;
+    // 주제는 힌트가 되어버리니까 답을 확인한 뒤(뒷면)에만 카드 상단 태그에 표시
+    if (state.reviewFlipped && !cur.kword && it.topic && (cat === 'expr' || cat === 'vocab' || cat === 'grammar')) tagLabel += ' · ' + it.topic;
     if (cur.kword) tagLabel = '한자 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : ''));
-    if (cur.eword) tagLabel = '표현 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : '')) + (it.topic ? ' · ' + it.topic : '');
+    if (cur.eword) tagLabel = '표현 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : '')) + (state.reviewFlipped && it.topic ? ' · ' + it.topic : '');
     var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
 
     var html = '<div style="text-align:right;color:var(--muted);font-size:13px;margin-bottom:6px;">'+progress+'</div>';
@@ -2171,11 +2192,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (kunList.length) parts.push('훈: ' + kunList.join('・'));
       return parts.join('  ');
     }
-    if (cat === 'grammar'){
-      // 접속 형태가 여러 줄이면 목록에서는 첫 줄만 보여줌 (펼치면 전부 나와요)
-      var cl = String(it.conjugation || '').split('\n').filter(function(x){ return x.trim(); });
-      return cl.length > 1 ? cl[0] + ' …' : (cl[0] || '');
-    }
+    // 문법의 접속 형태는 목록에 나오지 않고, 항목을 눌러 펼쳤을 때만 보임
+    if (cat === 'grammar') return '';
     return SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
   }
 
@@ -2221,7 +2239,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
             (it.topic && sortIsNotTopic(cat) ? '<span class="created-chip">📘 '+esc(it.topic)+'</span>' : '') +
             '<span class="created-chip">등록 '+shortDate(it.created)+'</span>' +
             (isWeak(it) ? '<span class="due-chip" title="자주 까먹은 항목">⚠️ '+it.wrongCount+'</span>' : '') +
-            (isDue ? '<span class="due-chip">복습 대기</span>' : '<span>다음 '+shortDate(it.next)+'</span>') +
+            (isDue ? '' : '<span>다음 '+shortDate(it.next)+'</span>') +
           '</div>' +
         '</div>' +
         '<div class="item-detail'+openClass+'" id="detail-'+it.id+'">'+body+'</div>' +
@@ -2265,7 +2283,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var rows;
     if (cat === 'vocab') rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
     else if (cat === 'kanji') rows = readingDetailRows(it).concat([['비고',it.note]]);
-    else if (cat === 'grammar') rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
+    else if (cat === 'grammar') rows = [['접속 형태',it.conjugation],['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
     else rows = [['예문',it.example],['비고',it.note],['나만의 문장',it.mySentence]];
     if (cat === 'expr' && it.unknownWords && it.unknownWords.length){
       rows.push(['모르는 단어', it.unknownWords.map(function(w){
