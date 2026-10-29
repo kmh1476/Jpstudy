@@ -222,6 +222,8 @@
   .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; line-height: 28px; letter-spacing: 0.02em; white-space: pre-wrap; }
   .item-row .reading { color: var(--muted); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
   .item-row .meaning { color: var(--ink); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
+  [data-speak] { cursor: pointer; }
+  [data-speak]:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
   .kanji-reads { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
   .kr-line { display: flex; align-items: center; gap: 8px; line-height: 28px; }
   .kr-badge { font-size: 11px; font-weight: 700; padding: 0 6px; line-height: 18px; border-radius: 2px; color: #fff; flex-shrink: 0; }
@@ -547,11 +549,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function renderDetailRow(r){
     var valueHtml;
     if (r[3] && r[3].length){
-      valueHtml = '<div class="row-value-grid">' + r[3].map(function(w){
-        return '<div class="word-item">'+esc(w)+'</div>';
+      valueHtml = '<div class="row-value-grid">' + r[3].map(function(w, i){
+        var sp = (r[4] && r[4][i]) ? ' data-speak="'+esc(r[4][i])+'"' : '';
+        return '<div class="word-item"'+sp+'>'+esc(w)+'</div>';
       }).join('') + '</div>';
     } else {
-      valueHtml = '<span class="row-value">'+esc(r[1])+'</span>';
+      // 예문 / 나만의 문장은 누르면 소리가 나게 함
+      var spk = (r[0] === '예문' || r[0] === '나만의 문장') ? ' data-speak="'+esc(r[1])+'"' : '';
+      valueHtml = '<span class="row-value"'+spk+'>'+esc(r[1])+'</span>';
     }
     return '<div class="row"><b class="'+rowLabelClass(r[0]).trim()+'">'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+valueHtml+'</div>';
   }
@@ -2250,7 +2255,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
       return headHtml + '<div>' +
         '<div class="item-row" data-toggle="'+it.id+'">' +
-          '<div class="main"><span class="word">'+esc(titleField||'')+'</span>' +
+          '<div class="main"><span class="word" data-speak="'+esc(titleField||'')+'">'+esc(titleField||'')+'</span>' +
             (cat === 'kanji' ? kanjiReadsHtml(it) : (subField ? '<span class="reading">'+esc(subField)+'</span>' : '')) +
             '<span class="meaning">'+esc(it.meaning||'')+'</span></div>' +
           '<div class="meta">' + boxDisplay(it) +
@@ -2293,7 +2298,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       .filter(function(g){ return g.reading || g.words.length; })
       .map(function(g){
         var items = formatKanjiWordItems(g.words);
-        return [(g.type === 'on' ? '음독' : '훈독'), items.join('\n'), g.reading || '', items];
+        var speaks = g.words.filter(function(w){ return (w.word || '') || (w.reading || '') || (w.meaning || ''); })
+          .map(function(w){ return w.reading || w.word || ''; });
+        return [(g.type === 'on' ? '음독' : '훈독'), items.join('\n'), g.reading || '', items, speaks];
       });
   }
   // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
@@ -2377,8 +2384,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return html;
   }
 
+  // 소리 낼 때는 일본어가 있는 줄만 읽음 (예문 밑에 적어둔 한국어 해석은 빼고)
+  function jpOnly(text){
+    return String(text || '').split('\n').map(function(line){
+      if (!/[\u3040-\u30ff\u4e00-\u9fff]/.test(line)) return '';
+      return line.replace(/[\uac00-\ud7af]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }).filter(Boolean).join('\n');
+  }
   function bindListEvents(cat){
     var panel = document.getElementById('panel-' + cat);
+    panel.querySelectorAll('[data-speak]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();   // 글자를 누르면 소리만 나고 펼쳐지진 않음
+        speakJapanese(jpOnly(el.getAttribute('data-speak')));
+      });
+    });
     panel.querySelectorAll('[data-toggle]').forEach(function(row){
       row.addEventListener('click', function(){
         var id = row.getAttribute('data-toggle');
