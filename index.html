@@ -222,6 +222,7 @@
   .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; line-height: 28px; letter-spacing: 0.02em; white-space: pre-wrap; }
   .item-row .reading { color: var(--muted); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
   .item-row .meaning { color: var(--ink); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
+  .spk-line { display: block; min-height: 1em; }
   [data-speak] { cursor: pointer; }
   [data-speak]:hover { text-decoration: underline dotted; text-underline-offset: 4px; }
   .kanji-reads { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
@@ -546,6 +547,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function formatKanjiWordList(words){
     return formatKanjiWordItems(words).join('\n');
   }
+  // 여러 줄 텍스트를 줄마다 따로 눌러서 소리 낼 수 있게 만듦 (일본어가 없는 줄은 그냥 글자로만)
+  function speakLinesHtml(text){
+    return String(text == null ? '' : text).split('\n').map(function(line){
+      var isJp = /[\u3040-\u30ff\u4e00-\u9fff]/.test(line);
+      return '<span class="spk-line"'+(isJp ? ' data-speak="'+esc(line)+'"' : '')+'>'+esc(line)+'</span>';
+    }).join('');
+  }
   function renderDetailRow(r){
     var valueHtml;
     if (r[3] && r[3].length){
@@ -555,8 +563,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       }).join('') + '</div>';
     } else {
       // 예문 / 나만의 문장은 누르면 소리가 나게 함
-      var spk = (r[0] === '예문' || r[0] === '나만의 문장') ? ' data-speak="'+esc(r[1])+'"' : '';
-      valueHtml = '<span class="row-value"'+spk+'>'+esc(r[1])+'</span>';
+      var isSentence = (r[0] === '예문' || r[0] === '나만의 문장');
+      valueHtml = '<span class="row-value">'+(isSentence ? speakLinesHtml(r[1]) : esc(r[1]))+'</span>';
     }
     return '<div class="row"><b class="'+rowLabelClass(r[0]).trim()+'">'+esc(r[0])+'</b>'+(r[2]?'<span class="row-inline">'+esc(r[2])+'</span>':'')+valueHtml+'</div>';
   }
@@ -2255,7 +2263,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
       return headHtml + '<div>' +
         '<div class="item-row" data-toggle="'+it.id+'">' +
-          '<div class="main"><span class="word" data-speak="'+esc(titleField||'')+'">'+esc(titleField||'')+'</span>' +
+          '<div class="main"><span class="word">'+speakLinesHtml(titleField)+'</span>' +
             (cat === 'kanji' ? kanjiReadsHtml(it) : (subField ? '<span class="reading">'+esc(subField)+'</span>' : '')) +
             '<span class="meaning">'+esc(it.meaning||'')+'</span></div>' +
           '<div class="meta">' + boxDisplay(it) +
