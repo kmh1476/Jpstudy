@@ -222,6 +222,12 @@
   .item-row .word { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 21px; line-height: 28px; letter-spacing: 0.02em; white-space: pre-wrap; }
   .item-row .reading { color: var(--muted); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
   .item-row .meaning { color: var(--ink); font-size: 14px; line-height: 28px; white-space: pre-wrap; }
+  .kanji-reads { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+  .kr-line { display: flex; align-items: center; gap: 8px; line-height: 28px; }
+  .kr-badge { font-size: 11px; font-weight: 700; padding: 0 6px; line-height: 18px; border-radius: 2px; color: #fff; flex-shrink: 0; }
+  .kr-badge.kr-on { background: var(--jade); }
+  .kr-badge.kr-kun { background: var(--indigo); }
+  .kr-text { font-family: 'Noto Serif JP', serif; font-weight: 500; font-size: 15px; }
   .item-row .meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
   .box-chip { color: var(--jade); font-weight: 700; font-size: 11px; border-bottom: 1px solid var(--jade); padding-bottom: 1px; }
   .due-chip { display: inline-block; background: var(--hanko); color: #fff; padding: 2px 7px; border-radius: 2px; font-size: 11px; font-weight: 700; transform: rotate(-2deg); }
@@ -2197,6 +2203,18 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
   }
 
+  // 한자 목록용: 음독/훈독을 색깔 라벨 + 줄바꿈으로 구분해서 보여줌
+  function kanjiReadsHtml(it){
+    var groups = getReadingGroups(it);
+    function line(type, label){
+      var list = groups.filter(function(g){ return g.type === type; }).map(function(g){ return g.reading; }).filter(Boolean);
+      if (!list.length) return '';
+      return '<div class="kr-line"><span class="kr-badge kr-'+type+'">'+label+'</span><span class="kr-text">'+esc(list.join('・'))+'</span></div>';
+    }
+    var html = line('on', '음독') + line('kun', '훈독');
+    return html ? '<div class="kanji-reads">'+html+'</div>' : '';
+  }
+
   function renderListMarkup(cat){
     var allItems = filteredSortedItems(cat);
     if (!allItems.length){
@@ -2232,7 +2250,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       return headHtml + '<div>' +
         '<div class="item-row" data-toggle="'+it.id+'">' +
           '<div class="main"><span class="word">'+esc(titleField||'')+'</span>' +
-            (subField ? '<span class="reading">'+esc(subField)+'</span>' : '') +
+            (cat === 'kanji' ? kanjiReadsHtml(it) : (subField ? '<span class="reading">'+esc(subField)+'</span>' : '')) +
             '<span class="meaning">'+esc(it.meaning||'')+'</span></div>' +
           '<div class="meta">' + boxDisplay(it) +
             (cat === 'expr' && it.unknownWords && it.unknownWords.length ? '<span class="created-chip">📝 단어 '+it.unknownWords.length+'</span>' : '') +
