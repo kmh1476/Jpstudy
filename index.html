@@ -2146,7 +2146,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return it.expr || '';
   }
   function searchableText(cat, it){
-    var parts = [it[TITLE_KEY[cat]], it.meaning, it.example, it.note, it.mySentence, it.topic];
+    // 예문 / 나만의 문장은 검색 대상에서 제외 (문장 속 단어까지 다 걸려서 지저분해지는 것 방지)
+    var parts = [it[TITLE_KEY[cat]], it.meaning, it.note, it.topic];
     if (cat === 'vocab') parts.push(it.reading);
     if (cat === 'kanji') getReadingGroups(it).forEach(function(g){
       parts.push(g.reading);
