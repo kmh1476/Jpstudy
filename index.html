@@ -301,6 +301,7 @@
   .ew-list { display: flex; flex-direction: column; gap: 4px; }
   .ew-add { align-self: flex-start; font-size: 12px; padding: 0; }
   .expr-set-no { font-size: 12px; color: var(--muted); width: 20px; flex-shrink: 0; text-align: center; }
+  .conj-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: -4px; }
   .save-msg { color: var(--jade); font-weight: 700; font-size: 13px; }
 
   .global-search { position: relative; margin-top: 10px; }
@@ -426,7 +427,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     ],
     grammar: [
       { key:'pattern', label:'문형', type:'textarea' },
-      { key:'conjugation', label:'접속 형태', type:'textarea' },
+      { key:'topic', label:'주제', type:'text' },
+      { key:'conjugation', label:'접속 형태', type:'textarea', full:true },
       { key:'meaning', label:'의미', type:'textarea', full:true },
       { key:'example', label:'예문', type:'textarea', full:true },
       { key:'note', label:'비고', type:'textarea', full:true },
@@ -548,6 +550,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var TITLE_KEY = { vocab:'word', kanji:'kanji', grammar:'pattern', expr:'expr' };
   var SUB_KEY = { vocab:'reading', kanji:'onyomi', grammar:'conjugation', expr:null };
   var ADD_LABEL = { vocab:'단어 추가', kanji:'한자 추가', grammar:'문법 추가', expr:'표현 추가' };
+
+  var TOPIC_CATS = ['expr', 'grammar'];
+  function isTopicCat(c){ return TOPIC_CATS.indexOf(c) !== -1; }
 
   function todayStr(){
     var d = new Date();
@@ -964,7 +969,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var PAGE_SIZE = 10;
   var state = { activeTab: 'review', reviewQueue: null, reviewIdx: 0, reviewFlipped: false, openDetail: {}, editMode: {}, theme: 'light',
     search: { vocab:'', kanji:'', grammar:'', expr:'' },
-    sortMode: { vocab:'due', kanji:'due', grammar:'due', expr:'topic' },
+    sortMode: { vocab:'due', kanji:'due', grammar:'topic', expr:'topic' },
     kanaFilter: { vocab:null, kanji:null, grammar:null, expr:null },
     page: { vocab:1, kanji:1, grammar:1, expr:1 },
     streak: { count: 0, lastDate: null },
@@ -975,7 +980,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     reviewHistory: [],
     spokenIdx: -1,
     settingsOpen: false,
-    topicFilter: null,
+    topicFilter: { expr:null, grammar:null },
+    lastTopic: { grammar:'' },
     exprSaveMsg: '',
     pendingImport: null,
     aiKey: '',
@@ -1052,16 +1058,18 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return state.reviewDirection;
   }
   function reviewTopicList(){
-    var counts = {}, order = [];
-    function add(it){
+    var out = [], idx = {};
+    function add(cat, it){
       var t = it.topic || '';
       if (!t) return;
-      if (counts[t] === undefined){ counts[t] = 0; order.push(t); }
-      counts[t]++;
+      var k = cat + ':' + t;
+      if (idx[k] === undefined){ idx[k] = out.length; out.push({ cat:cat, name:t, count:0 }); }
+      out[idx[k]].count++;
     }
-    data.expr.forEach(add);
-    ewordList().forEach(function(e){ add(e.it); });
-    return order.map(function(t){ return { name:t, count:counts[t] }; });
+    data.expr.forEach(function(it){ add('expr', it); });
+    ewordList().forEach(function(e){ add('expr', e.it); });
+    data.grammar.forEach(function(it){ add('grammar', it); });
+    return out;
   }
   function listenCount(){
     return data.vocab.length + data.expr.length + (state.includeKword ? kwordList().length : 0) + (state.includeEword ? ewordList().length : 0);
@@ -1069,12 +1077,18 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function buildQueue(mode, onlyCat){
     var q = [];
     if (onlyCat && onlyCat.indexOf('topic:') === 0){
-      // 주제별 복습: 그 주제의 표현 + 표현 속 모르는 단어
-      var tn = onlyCat.slice(6);
-      data.expr.forEach(function(it){ if ((it.topic || '') === tn) q.push({ cat:'expr', item:it, dir:pickDirection() }); });
-      ewordList().forEach(function(e){
-        if ((e.it.topic || '') === tn) q.push({ cat:'vocab', eword:true, key:e.key, item:ewordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
-      });
+      // 주제별 복습: 표현 주제 = 그 주제의 표현 + 표현 속 모르는 단어 / 문법 주제 = 그 주제의 문법
+      var rest = onlyCat.slice(6);
+      var tcat = rest.slice(0, rest.indexOf(':'));
+      var tn = rest.slice(rest.indexOf(':') + 1);
+      if (tcat === 'grammar'){
+        data.grammar.forEach(function(it){ if ((it.topic || '') === tn) q.push({ cat:'grammar', item:it, dir:pickDirection() }); });
+      } else {
+        data.expr.forEach(function(it){ if ((it.topic || '') === tn) q.push({ cat:'expr', item:it, dir:pickDirection() }); });
+        ewordList().forEach(function(e){
+          if ((e.it.topic || '') === tn) q.push({ cat:'vocab', eword:true, key:e.key, item:ewordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
+        });
+      }
       return shuffle(q);
     }
     if (onlyCat === 'listen'){
@@ -1265,7 +1279,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       }).join('');
       if (kwTotal) catChips += '<button class="cat-review-chip cat-kanji" data-cat-review="kword">한자 단어 <span>'+kwTotal+'</span></button>';
       var topicChips = reviewTopicList().map(function(t){
-        return '<button class="cat-review-chip cat-expr" data-cat-review="topic:'+esc(t.name)+'">📘 '+esc(t.name)+' <span>'+t.count+'</span></button>';
+        return '<button class="cat-review-chip '+(t.cat === 'grammar' ? 'cat-grammar' : 'cat-expr')+'" data-cat-review="topic:'+t.cat+':'+esc(t.name)+'">'+(t.cat === 'grammar' ? '📗 ' : '📘 ')+esc(t.name)+' <span>'+t.count+'</span></button>';
       }).join('');
       var lc = listenCount();
       if (lc) catChips += '<button class="cat-review-chip" style="color:var(--ink)" data-cat-review="listen">🎧 듣기 <span>'+lc+'</span></button>';
@@ -1276,7 +1290,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         '<div class="review-summary">'+summaryHtml+'</div>' +
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
-        (topicChips ? '<div class="cat-review-block"><div class="cat-review-label">주제별 복습 (그 주제의 표현 + 표현 속 모르는 단어)</div><div class="cat-review-row">'+topicChips+'</div></div>' : '') +
+        (topicChips ? '<div class="cat-review-block"><div class="cat-review-label">주제별 복습 (📘 표현 + 표현 속 모르는 단어 · 📗 문법)</div><div class="cat-review-row">'+topicChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderKwordToggle() +
         renderEwordToggle() +
@@ -1365,7 +1379,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       speakText = term;
       backRows = backRowsFor(cat, it);
     }
-    if (!cur.kword && it.topic && (cat === 'expr' || cat === 'vocab')) tagLabel += ' · ' + it.topic;
+    if (!cur.kword && it.topic && (cat === 'expr' || cat === 'vocab' || cat === 'grammar')) tagLabel += ' · ' + it.topic;
     if (cur.kword) tagLabel = '한자 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : ''));
     if (cur.eword) tagLabel = '표현 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : '')) + (it.topic ? ' · ' + it.topic : '');
     var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
@@ -1467,12 +1481,32 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<'+tag+' id="'+id+'"'+(field.type==='textarea'?'':' type="text"')+valueAttr+'>'+inner+'</'+tag+'>' +
       '</div>';
   }
+  // 문법 '접속 형태' 빠른 입력: 누르면 "명사의 보통체형: " 같은 줄이 접속 형태 칸에 들어가요.
+  var CONJ_PRESETS = [
+    ['명사 보통체','명사의 보통체형'], ['명사 정중체','명사의 정중체형'],
+    ['な형 보통체','な형용사의 보통체형'], ['な형 정중체','な형용사의 정중체형'],
+    ['い형 보통체','い형용사의 보통체형'], ['い형 정중체','い형용사의 정중체형'],
+    ['동사 보통체','동사의 보통체형'], ['동사 정중체','동사의 정중체형']
+  ];
+  function conjChipsHtml(){
+    return '<div class="full conj-chips"><span class="direction-label">빠른 입력:</span>' +
+      CONJ_PRESETS.map(function(c){
+        return '<button type="button" class="kana-chip" tabindex="-1" data-conj-insert="'+esc(c[1])+'">'+esc(c[0])+'</button>';
+      }).join('') + '</div>';
+  }
   function generateFormFields(cat, prefix, existing){
     var fields = FIELD_DEFS[cat];
     var firstHtml = fieldRowHtml(prefix, fields[0], existing ? existing[fields[0].key] : '');
     var warningHtml = '<div class="full dup-warning" id="'+prefix+'-dup-warning"></div>';
     var restHtml = fields.slice(1).map(function(f){
-      var h = fieldRowHtml(prefix, f, existing ? existing[f.key] : '');
+      var val = existing ? existing[f.key] : '';
+      if (!existing && f.key === 'topic') val = (state.lastTopic && state.lastTopic[cat]) || '';
+      var h = fieldRowHtml(prefix, f, val);
+      if (f.key === 'topic'){
+        h = h.replace('<input ', '<input list="topic-list-'+prefix+'" autocomplete="off" placeholder="주제 (이어서 쓰면 자동으로 채워져요)" ') +
+          '<datalist id="topic-list-'+prefix+'">' + topicList(cat).map(function(t){ return '<option value="'+esc(t)+'">'; }).join('') + '</datalist>';
+      }
+      if (f.key === 'conjugation') h += conjChipsHtml();
       if (f.key === 'mySentence') h += aiBoxHtml(prefix);
       return h;
     }).join('');
@@ -1781,9 +1815,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   // ---------- 표현 탭: 주제 단위 입력 폼 ----------
   var exprRowCounter = 0;
-  function topicList(){
+  function topicList(cat){
+    cat = cat || 'expr';
     var seen = {}, out = [];
-    data.expr.forEach(function(it){
+    data[cat].forEach(function(it){
       var t = it.topic || '';
       if (t && !seen[t]){ seen[t] = true; out.push(t); }
     });
@@ -1893,35 +1928,37 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     exprItems.forEach(function(it){ data.expr.push(it); });
     pushCategory('expr');
     state.exprSaveMsg = '✅ 표현 ' + exprItems.length + '개' + (wordCount ? ' (모르는 단어 ' + wordCount + '개 포함)' : '') + ' 저장했어요.' + (skipE ? ' (이미 있는 표현 ' + skipE + '개는 건너뜀)' : '');
-    state.topicFilter = topic ? topic : null;
+    state.topicFilter.expr = topic ? topic : null;
     state.sortMode.expr = 'topic';
     state.page.expr = 1;
     state.pendingFocusCat = 'expr';
     renderAll();
   }
-  function renderTopicRow(){
-    var wrap = document.getElementById('expr-topic-row');
+  function renderTopicRow(cat){
+    cat = cat || 'expr';
+    var wrap = document.getElementById(cat + '-topic-row');
     if (!wrap) return;
+    var tf = state.topicFilter;
     var topics = [], seen = {}, hasNone = false;
-    data.expr.forEach(function(it){
+    data[cat].forEach(function(it){
       var t = it.topic || '';
       if (!t){ hasNone = true; return; }
       if (!seen[t]){ seen[t] = true; topics.push(t); }
     });
-    if (state.topicFilter !== null && state.topicFilter !== '' && !seen[state.topicFilter]) state.topicFilter = null;
-    if (state.topicFilter === '' && !hasNone) state.topicFilter = null;
+    if (tf[cat] !== null && tf[cat] !== '' && !seen[tf[cat]]) tf[cat] = null;
+    if (tf[cat] === '' && !hasNone) tf[cat] = null;
     if (!topics.length && !hasNone){ wrap.innerHTML = ''; return; }
-    var chips = ['<button type="button" class="kana-chip'+(state.topicFilter === null ? ' active' : '')+'" data-topic-all="1">전체 주제</button>'];
+    var chips = ['<button type="button" class="kana-chip'+(tf[cat] === null ? ' active' : '')+'" data-topic-all="1">전체 주제</button>'];
     topics.forEach(function(t){
-      chips.push('<button type="button" class="kana-chip'+(state.topicFilter === t ? ' active' : '')+'" data-topic="'+esc(t)+'">'+esc(t)+'</button>');
+      chips.push('<button type="button" class="kana-chip'+(tf[cat] === t ? ' active' : '')+'" data-topic="'+esc(t)+'">'+esc(t)+'</button>');
     });
-    if (hasNone) chips.push('<button type="button" class="kana-chip'+(state.topicFilter === '' ? ' active' : '')+'" data-topic="">주제 없음</button>');
+    if (hasNone) chips.push('<button type="button" class="kana-chip'+(tf[cat] === '' ? ' active' : '')+'" data-topic="">주제 없음</button>');
     wrap.innerHTML = chips.join('');
     wrap.querySelectorAll('button').forEach(function(btn){
       btn.addEventListener('click', function(){
-        state.topicFilter = btn.hasAttribute('data-topic-all') ? null : btn.getAttribute('data-topic');
-        state.page.expr = 1;
-        refreshListOnly('expr');
+        tf[cat] = btn.hasAttribute('data-topic-all') ? null : btn.getAttribute('data-topic');
+        state.page[cat] = 1;
+        refreshListOnly(cat);
       });
     });
   }
@@ -1952,7 +1989,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
     var controlsHtml = '<div class="list-controls">' +
       '<input type="text" class="search-input" id="'+cat+'-search" placeholder="검색 (단어·뜻·읽기·주제 등)" value="'+esc(state.search[cat]||'')+'">' +
-      (isTopic ? '<div class="kana-row" id="expr-topic-row"></div>' : '') +
+      (isTopicCat(cat) ? '<div class="kana-row" id="'+cat+'-topic-row"></div>' : '') +
       '<div class="sort-row" id="'+cat+'-sort-row"></div>' +
       '<div class="kana-row" id="'+cat+'-kana-row"></div>' +
       '</div>' +
@@ -1961,7 +1998,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     panel.innerHTML = formHtml + controlsHtml;
     renderSortRow(cat);
     renderKanaRow(cat);
-    if (isTopic) renderTopicRow();
+    if (isTopicCat(cat)) renderTopicRow(cat);
     bindListEvents(cat);
     if (!isTopic){
       bindDuplicateCheck(cat, prefix, null);
@@ -1997,6 +2034,12 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         if (isKanji) fields.readings = readingGroups
           .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
           .filter(function(g){ return g.reading || g.words.length; });
+        if (cat === 'grammar'){
+          var ms = 0;
+          data.grammar.forEach(function(g){ if ((g.topic || '') === (fields.topic || '') && (g.seq || 0) > ms) ms = g.seq; });
+          fields.seq = ms + 1;
+          state.lastTopic.grammar = fields.topic || '';   // 같은 주제로 이어서 쓸 수 있게 기억
+        }
         state.pendingFocusCat = cat;
         addItem(cat, fields);
       });
@@ -2013,7 +2056,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var wrap = document.getElementById(cat + '-sort-row');
     if (!wrap) return;
     wrap.innerHTML =
-      (cat === 'expr' ? '<button data-sort="topic" class="'+(state.sortMode[cat]==='topic'?'active':'')+'">주제순</button>' : '') +
+      (isTopicCat(cat) ? '<button data-sort="topic" class="'+(state.sortMode[cat]==='topic'?'active':'')+'">주제순</button>' : '') +
       '<button data-sort="due" class="'+(state.sortMode[cat]==='due'?'active':'')+'">복습순</button>' +
       '<button data-sort="created" class="'+(state.sortMode[cat]==='created'?'active':'')+'">등록순</button>' +
       '<button data-sort="kana" class="'+(state.sortMode[cat]==='kana'?'active':'')+'">발음순 (あいうえお)</button>';
@@ -2043,11 +2086,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       });
     });
   }
-  function sortIsNotTopic(cat){ return !(cat === 'expr' && state.sortMode.expr === 'topic'); }
+  function sortIsNotTopic(cat){ return !(isTopicCat(cat) && state.sortMode[cat] === 'topic'); }
   function refreshListOnly(cat){
     var container = document.getElementById(cat + '-list-container');
     if (!container) return;
-    if (cat === 'expr') renderTopicRow();
+    if (isTopicCat(cat)) renderTopicRow(cat);
     container.innerHTML = renderListMarkup(cat);
     bindListEvents(cat);
   }
@@ -2103,14 +2146,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var items = data[cat].slice();
     var term = (state.search[cat] || '').trim().toLowerCase();
     if (term) items = items.filter(function(it){ return searchableText(cat, it).indexOf(term) !== -1; });
-    if (cat === 'expr' && state.topicFilter !== null){
-      items = items.filter(function(it){ return (it.topic || '') === state.topicFilter; });
+    if (isTopicCat(cat) && state.topicFilter[cat] !== null){
+      items = items.filter(function(it){ return (it.topic || '') === state.topicFilter[cat]; });
     }
     var kf = state.kanaFilter[cat];
     if (kf) items = items.filter(function(it){ return kanaRowOf(readingKeyOf(cat, it)) === (kf === '기타' ? null : kf); });
-    if (cat === 'expr' && state.sortMode.expr === 'topic'){
+    if (isTopicCat(cat) && state.sortMode[cat] === 'topic'){
       var rank = {}, rn = 0;
-      data.expr.forEach(function(it){ var k = it.topic || ''; if (rank[k] === undefined) rank[k] = rn++; });
+      data[cat].forEach(function(it){ var k = it.topic || ''; if (rank[k] === undefined) rank[k] = rn++; });
       items.sort(function(a,b){
         var ra = rank[a.topic || ''], rb = rank[b.topic || ''];
         if (ra !== rb) return ra - rb;
@@ -2141,6 +2184,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (kunList.length) parts.push('훈: ' + kunList.join('・'));
       return parts.join('  ');
     }
+    if (cat === 'grammar'){
+      // 접속 형태가 여러 줄이면 목록에서는 첫 줄만 보여줌 (펼치면 전부 나와요)
+      var cl = String(it.conjugation || '').split('\n').filter(function(x){ return x.trim(); });
+      return cl.length > 1 ? cl[0] + ' …' : (cl[0] || '');
+    }
     return SUB_KEY[cat] ? it[SUB_KEY[cat]] : '';
   }
 
@@ -2162,10 +2210,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     allItems.forEach(function(x){ var k = x.topic || ''; topicCounts[k] = (topicCounts[k] || 0) + 1; });
     var rows = items.map(function(it){
       var headHtml = '';
-      if (cat === 'expr' && state.sortMode.expr === 'topic'){
+      if (isTopicCat(cat) && state.sortMode[cat] === 'topic'){
         var tk = it.topic || '';
         if (tk !== prevTopic){
-          headHtml = '<div class="topic-head">📘 ' + esc(tk || '주제 없음') + '<span>' + topicCounts[tk] + '개</span></div>';
+          headHtml = '<div class="topic-head">' + (cat === 'grammar' ? '📗 ' : '📘 ') + esc(tk || '주제 없음') + '<span>' + topicCounts[tk] + '개</span></div>';
           prevTopic = tk;
         }
       }
@@ -2401,7 +2449,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     state.search[cat] = term;
     state.page[cat] = 1;
     state.kanaFilter[cat] = null;
-    if (cat === 'expr') state.topicFilter = null;
+    if (isTopicCat(cat)) state.topicFilter[cat] = null;
     state.openDetail[it.id] = true;
     state.editMode[it.id] = false;
     var input = document.getElementById('global-search');
@@ -2447,6 +2495,19 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     auth.createUserWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
   });
   document.getElementById('settings-btn').addEventListener('click', openSettings);
+  // 문법 '접속 형태' 빠른 입력 버튼 (입력 폼/수정 폼 공통)
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-conj-insert]');
+    if (!b) return;
+    var form = b.closest('form.entry');
+    var ta = form && form.querySelector('textarea[id$="-conjugation"]');
+    if (!ta) return;
+    var v = ta.value;
+    if (v && !/\n$/.test(v)) v += '\n';
+    ta.value = v + b.getAttribute('data-conj-insert') + ': ';
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  });
   var gsInput = document.getElementById('global-search');
   gsInput.addEventListener('input', renderGlobalResults);
   gsInput.addEventListener('focus', function(){ if (gsInput.value.trim()) renderGlobalResults(); });
