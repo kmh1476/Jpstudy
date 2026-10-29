@@ -266,7 +266,9 @@
   .login-card .login-actions button { flex: 1; }
   .login-error { color: var(--hanko); font-size: 13px; margin-top: 10px; min-height: 18px; }
 
-  .ai-check { margin-top: -4px; }
+  .ai-check { margin-top: -6px; line-height: 1; }
+  .ai-check button { font-size: 12px; padding: 3px 10px; line-height: 1.4; }
+  .expr-set .ai-check { margin-top: 0; }
   .ai-card { margin-top: 10px; border: 1px solid var(--line-strong); border-left: 4px solid var(--indigo); background: var(--paper); padding: 12px 14px; border-radius: 2px; font-size: 14px; line-height: 1.7; }
   .ai-card.ok { border-left-color: var(--jade); }
   .ai-card.fix { border-left-color: var(--hanko); }
@@ -293,9 +295,23 @@
   .topic-head span { font-family: 'Noto Sans KR', sans-serif; font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; }
   .expr-set { border: 1px solid var(--line-strong); background: var(--paper); padding: 8px; border-radius: 3px; display: flex; flex-direction: column; gap: 6px; }
   .expr-set .word-mini-row { margin: 0; }
-  .expr-set textarea { min-height: 40px; }
+  .expr-set textarea { min-height: 34px; padding: 6px 8px; }
+  .expr-set .uw-row input { padding: 5px 7px; font-size: 13px; }
+  .ew-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ew-list { display: flex; flex-direction: column; gap: 4px; }
+  .ew-add { align-self: flex-start; font-size: 12px; padding: 0; }
   .expr-set-no { font-size: 12px; color: var(--muted); width: 20px; flex-shrink: 0; text-align: center; }
   .save-msg { color: var(--jade); font-weight: 700; font-size: 13px; }
+
+  .global-search { position: relative; margin-top: 10px; }
+  .global-search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--paper-card); color: var(--ink); font-size: 14px; font-family: inherit; }
+  #global-results { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 30; max-height: 60vh; overflow-y: auto; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
+  .gs-row { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .gs-row:hover { background: var(--paper2); }
+  .gs-cat { font-size: 11px; font-weight: 700; flex-shrink: 0; border: 1px solid currentColor; border-radius: 2px; padding: 0 5px; }
+  .gs-title { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; flex-shrink: 0; }
+  .gs-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .gs-empty { padding: 12px; color: var(--muted); font-size: 13px; }
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
@@ -336,6 +352,7 @@
     <p class="sub">단어 · 한자 · 문법 · 표현 — 매일 쓰고, 때 되면 다시 꺼내보기</p>
     <span class="sync-badge" id="sync-badge" title="Firebase Firestore에 실시간으로 저장돼요.">☁️ 동기화됨</span>
     <span class="sync-badge" id="streak-badge"></span>
+    <div class="global-search"><input type="search" id="global-search" placeholder="🔍 전체 검색 (단어 · 한자 · 문법 · 표현 · 주제)" autocomplete="off"><div id="global-results" class="hidden"></div></div>
     <button type="button" class="settings-gear" id="settings-btn" title="설정" aria-label="설정">⚙️</button>
     <nav class="tabs" id="tabs"></nav>
   </header>
@@ -605,6 +622,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         state.autoSpeak = !!d.autoSpeak;
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
       }
+      if (d.includeEword !== undefined && d.includeEword !== state.includeEword){
+        state.includeEword = !!d.includeEword;
+        renderTabs();
+        if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
+      }
       if (d.includeKword !== undefined && d.includeKword !== state.includeKword){
         state.includeKword = !!d.includeKword;
         renderTabs();
@@ -706,8 +728,64 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     };
   }
 
-  function totalDue(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + dueCount(c); }, 0) + (state.includeKword ? kwordDue().length : 0); }
-  function totalAll(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + data[c].length; }, 0) + (state.includeKword ? kwordList().length : 0); }
+  // ---------- 표현 속 "모르는 단어" 복습 ----------
+  // 표현마다 딸린 모르는 단어(it.unknownWords)를 표현 복습 때 따로 카드로 내줌.
+  // 단어장과는 완전히 별개라서, 철자가 같아도 표현마다 뜻이 달라도 문제없음.
+  // 복습 기록(box/next/...)은 각 단어 객체 안에 저장됨.
+  function ewKey(it, w, i){ return it.id + '#' + (w.id || ('i' + i)); }
+  function ewordList(){
+    var out = [];
+    data.expr.forEach(function(it){
+      (it.unknownWords || []).forEach(function(w, i){
+        if (!w || !w.word || !String(w.word).trim()) return;
+        out.push({ key: ewKey(it, w, i), w: w, it: it });
+      });
+    });
+    return out;
+  }
+  function ewordDue(){
+    var t = todayStr();
+    return ewordList().filter(function(e){ return !e.w.next || e.w.next <= t; });
+  }
+  function ewordWeak(){
+    return ewordList().filter(function(e){ return (e.w.wrongCount || 0) >= WEAK_THRESHOLD; });
+  }
+  function ewordToItem(e){
+    var w = e.w;
+    return {
+      id: 'ew:' + e.key, word: w.word, reading: w.reading || '', meaning: w.meaning || '',
+      note: '표현: ' + (e.it.expr || '') + (e.it.meaning ? ' (' + e.it.meaning + ')' : ''),
+      topic: e.it.topic || '', box: w.box || 0, next: w.next || todayStr()
+    };
+  }
+  function findEword(key){
+    var found = null;
+    data.expr.forEach(function(it){
+      (it.unknownWords || []).forEach(function(w, i){ if (!found && ewKey(it, w, i) === key) found = w; });
+    });
+    return found;
+  }
+  function reviewExprWord(key, remembered){
+    bumpStreak();
+    var w = findEword(key);
+    if (!w) return;
+    var today = todayStr();
+    if (w.lastReviewedDate === today) return;
+    var box = remembered ? Math.min((w.box || 0) + 1, INTERVALS.length - 1) : 0;
+    w.box = box;
+    w.next = addDays(today, INTERVALS[box]);
+    if (!remembered) w.wrongCount = (w.wrongCount || 0) + 1;
+    w.lastReviewedDate = today;
+    pushCategory('expr');
+  }
+  function copyEword(w){
+    var o = { word: w.word || '', reading: w.reading || '', meaning: w.meaning || '' };
+    ['id', 'box', 'next', 'wrongCount', 'lastReviewedDate'].forEach(function(k){ if (w[k] !== undefined) o[k] = w[k]; });
+    return o;
+  }
+
+  function totalDue(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + dueCount(c); }, 0) + (state.includeKword ? kwordDue().length : 0) + (state.includeEword ? ewordDue().length : 0); }
+  function totalAll(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + data[c].length; }, 0) + (state.includeKword ? kwordList().length : 0) + (state.includeEword ? ewordList().length : 0); }
   function reviewResult(cat, id, remembered){
     var it = data[cat].find(function(x){ return x.id === id; });
     if (!it) return;
@@ -759,6 +837,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
   }
   function snapshotFor(cur){
+    if (cur.eword){
+      var ew = findEword(cur.key);
+      return { eword:true, key:cur.key, state: ew ? pickSrs(ew) : null };
+    }
     if (cur.kword){
       var states = [];
       eachKwordMatch(cur.key, function(w){ states.push(pickSrs(w)); });
@@ -768,6 +850,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     return { kword:false, cat:cur.cat, id:cur.item.id, state: it ? pickSrs(it) : null };
   }
   function restoreSnapshot(snap){
+    if (snap.eword){
+      var ew = findEword(snap.key);
+      if (ew && snap.state){ putSrs(ew, snap.state); pushCategory('expr'); }
+      return;
+    }
     if (snap.kword){
       var i = 0;
       eachKwordMatch(snap.key, function(w){ if (snap.states[i]) putSrs(w, snap.states[i]); i++; });
@@ -789,6 +876,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function applyReview(cur, remembered){
     state.reviewHistory.push({ idx: state.reviewIdx, snap: snapshotFor(cur) });
     if (cur.kword) reviewKanjiWord(cur.key, remembered);
+    else if (cur.eword) reviewExprWord(cur.key, remembered);
     else reviewResult(cur.cat, cur.item.id, remembered);
   }
 
@@ -882,6 +970,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     streak: { count: 0, lastDate: null },
     dailyCap: 30,
     includeKword: false,
+    includeEword: false,
     autoSpeak: true,
     reviewHistory: [],
     spokenIdx: -1,
@@ -952,7 +1041,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   function isWeak(it){ return (it.wrongCount || 0) >= WEAK_THRESHOLD; }
   function weakItems(cat){ return data[cat].filter(isWeak); }
-  function totalWeak(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + weakItems(c).length; }, 0) + (state.includeKword ? kwordWeak().length : 0); }
+  function totalWeak(){ return Object.keys(CATS).reduce(function(sum,c){ return sum + weakItems(c).length; }, 0) + (state.includeKword ? kwordWeak().length : 0) + (state.includeEword ? ewordWeak().length : 0); }
 
   function shuffle(arr){
     for (var i = arr.length - 1; i > 0; i--){ var j = Math.floor(Math.random()*(i+1)); var tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp; }
@@ -971,19 +1060,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       counts[t]++;
     }
     data.expr.forEach(add);
-    data.vocab.forEach(add);
+    ewordList().forEach(function(e){ add(e.it); });
     return order.map(function(t){ return { name:t, count:counts[t] }; });
   }
   function listenCount(){
-    return data.vocab.length + data.expr.length + (state.includeKword ? kwordList().length : 0);
+    return data.vocab.length + data.expr.length + (state.includeKword ? kwordList().length : 0) + (state.includeEword ? ewordList().length : 0);
   }
   function buildQueue(mode, onlyCat){
     var q = [];
     if (onlyCat && onlyCat.indexOf('topic:') === 0){
-      // 주제별 복습: 그 주제의 표현 + 그 주제에서 나온 모르는 단어(단어장)
+      // 주제별 복습: 그 주제의 표현 + 표현 속 모르는 단어
       var tn = onlyCat.slice(6);
       data.expr.forEach(function(it){ if ((it.topic || '') === tn) q.push({ cat:'expr', item:it, dir:pickDirection() }); });
-      data.vocab.forEach(function(it){ if ((it.topic || '') === tn) q.push({ cat:'vocab', item:it, dir:pickDirection() }); });
+      ewordList().forEach(function(e){
+        if ((e.it.topic || '') === tn) q.push({ cat:'vocab', eword:true, key:e.key, item:ewordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
+      });
       return shuffle(q);
     }
     if (onlyCat === 'listen'){
@@ -993,6 +1084,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       });
       if (state.includeKword) kwordList().forEach(function(e){
         q.push({ cat:'vocab', kword:true, key:e.key, item:kwordToItem(e), dir:'listen' });
+      });
+      if (state.includeEword) ewordList().forEach(function(e){
+        q.push({ cat:'vocab', eword:true, key:e.key, item:ewordToItem(e), dir:'listen' });
       });
       return shuffle(q);
     }
@@ -1007,6 +1101,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var kl = mode === 'all' ? kwordList() : (mode === 'weak' ? kwordWeak() : kwordDue());
       kl.forEach(function(e){
         q.push({ cat: 'vocab', kword: true, key: e.key, item: kwordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
+      });
+    }
+    // 표현 복습(항목별 '표현' 버튼)에는 표현 속 모르는 단어가 같이 나오고,
+    // 오늘 복습/전체/취약 복습에는 '포함' 체크했을 때만 들어감.
+    if ((!onlyCat && state.includeEword) || onlyCat === 'expr'){
+      var el = mode === 'all' ? ewordList() : (mode === 'weak' ? ewordWeak() : ewordDue());
+      el.forEach(function(e){
+        q.push({ cat:'vocab', eword:true, key:e.key, item:ewordToItem(e), dir: e.w.meaning ? pickDirection() : 'normal' });
       });
     }
     return shuffle(q);
@@ -1050,6 +1152,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         it.next = todayStr();
         it.wrongCount = 0;
         delete it.lastReviewedDate;
+        if (cat === 'expr'){
+          (it.unknownWords || []).forEach(function(w){ w.box = 0; w.next = todayStr(); w.wrongCount = 0; delete w.lastReviewedDate; });
+        }
         if (cat === 'kanji'){
           // 한자 예시 단어의 복습 기록도 함께 초기화
           ensureNested(it).forEach(function(g){
@@ -1070,6 +1175,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       data[c].forEach(function(it){ levels[it.box || 0]++; total++; });
     });
     if (state.includeKword) kwordList().forEach(function(e){ levels[e.w.box || 0]++; total++; });
+    if (state.includeEword) ewordList().forEach(function(e){ levels[e.w.box || 0]++; total++; });
     var streakHtml = state.streak.count > 0
       ? '<span class="streak-inline">🔥 연속 '+state.streak.count+'일째</span>' : '';
     if (!total) return streakHtml ? '<div class="stats-panel">'+streakHtml+'</div>' : '';
@@ -1110,6 +1216,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }
     return html;
   }
+  function renderEwordToggle(){
+    var n = ewordList().length;
+    if (!n) return '';
+    return '<div class="direction-row"><label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">' +
+      '<input type="checkbox" id="eword-toggle"'+(state.includeEword?' checked':'')+'> 표현 속 모르는 단어도 오늘 복습에 포함 ' +
+      '<span class="direction-label">(총 '+n+'개 · 표현/주제별 복습에는 항상 나와요)</span></label></div>';
+  }
   function renderKwordToggle(){
     var n = kwordList().length;
     if (!n) return '';
@@ -1135,6 +1248,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       }).join('');
       var kwTotal = kwordList().length;
       if (kwTotal && state.includeKword) summaryHtml += '<div class="review-card"><div class="n cat-kanji">'+kwordDue().length+'</div><div class="label">한자 단어 복습</div></div>';
+      var ewTotal = ewordList().length;
+      if (ewTotal && state.includeEword) summaryHtml += '<div class="review-card"><div class="n cat-expr">'+ewordDue().length+'</div><div class="label">표현 단어 복습</div></div>';
       var due = totalDue(), all = totalAll(), weak = totalWeak();
       var dueForToday = (state.dailyCap !== 'all' && due > state.dailyCap) ? state.dailyCap : due;
       var buttons = '';
@@ -1161,9 +1276,10 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         '<div class="review-summary">'+summaryHtml+'</div>' +
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
         (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
-        (topicChips ? '<div class="cat-review-block"><div class="cat-review-label">주제별 복습 (그 주제의 표현 + 모르는 단어)</div><div class="cat-review-row">'+topicChips+'</div></div>' : '') +
+        (topicChips ? '<div class="cat-review-block"><div class="cat-review-label">주제별 복습 (그 주제의 표현 + 표현 속 모르는 단어)</div><div class="cat-review-row">'+topicChips+'</div></div>' : '') +
         (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
         renderKwordToggle() +
+        renderEwordToggle() +
         renderSpeakToggle() +
         renderCapRow() +
         renderDirectionRow();
@@ -1172,6 +1288,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (spToggle) spToggle.addEventListener('change', function(){
         state.autoSpeak = spToggle.checked;
         if (settingsRef) settingsRef.set({ autoSpeak: state.autoSpeak }, { merge: true }).catch(function(){});
+      });
+      var ewToggle = document.getElementById('eword-toggle');
+      if (ewToggle) ewToggle.addEventListener('change', function(){
+        state.includeEword = ewToggle.checked;
+        if (settingsRef) settingsRef.set({ includeEword: state.includeEword }, { merge: true }).catch(function(){});
+        renderTabs();
+        renderReview();
       });
       var kwToggle = document.getElementById('kword-toggle');
       if (kwToggle) kwToggle.addEventListener('change', function(){
@@ -1244,6 +1367,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }
     if (!cur.kword && it.topic && (cat === 'expr' || cat === 'vocab')) tagLabel += ' · ' + it.topic;
     if (cur.kword) tagLabel = '한자 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : ''));
+    if (cur.eword) tagLabel = '표현 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : '')) + (it.topic ? ' · ' + it.topic : '');
     var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
 
     var html = '<div style="text-align:right;color:var(--muted);font-size:13px;margin-bottom:6px;">'+progress+'</div>';
@@ -1483,37 +1607,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       });
     });
   }
-  function legacyUnknownCount(){
-    var n = 0;
-    data.expr.forEach(function(it){
-      (it.unknownWords || []).forEach(function(w){ if (w && w.word && String(w.word).trim()) n++; });
-    });
-    return n;
-  }
-  function migrateUnknownWords(){
-    var n = legacyUnknownCount();
-    if (!n) return;
-    if (!confirm('표현에 적어둔 모르는 단어 ' + n + '개를 단어장(단어 탭)으로 옮길까요?\n이미 단어장에 있는 단어는 건너뛰고, 표현 쪽의 모르는 단어 목록은 비워져요.')) return;
-    var have = {}, added = 0, today = todayStr();
-    data.vocab.forEach(function(it){ have[(it.word || '').trim()] = true; });
-    data.expr.forEach(function(it){
-      if (!Array.isArray(it.unknownWords) || !it.unknownWords.length) return;
-      it.unknownWords.forEach(function(w){
-        var word = ((w && w.word) || '').trim();
-        if (!word || have[word]) return;
-        have[word] = true;
-        data.vocab.push({ id:uid(), created:it.created || today, box:0, next:today, word:word, reading:w.reading || '', meaning:w.meaning || '',
-          example:'', note:'', mySentence:'', topic:it.topic || '', fromExpr:true });
-        added++;
-      });
-      delete it.unknownWords;
-    });
-    pushCategory('expr');
-    pushCategory('vocab');
-    alert(added + '개를 단어장에 추가했어요.');
-    renderAll();
-    renderSettings();
-  }
   function openSettings(){
     state.settingsOpen = true;
     document.getElementById('settings-overlay').classList.remove('hidden');
@@ -1534,7 +1627,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<div class="settings-section"><h3>데이터 백업</h3>' + renderBackupRow() +
         '<div class="settings-help">내보내기로 받은 JSON 파일을 불러오기로 다시 가져올 수 있어요. (AI 키는 백업에 포함되지 않아요)</div></div>' +
       '<div class="settings-section"><h3>기타</h3><div class="direction-row" style="margin-top:0;">' +
-        (legacyUnknownCount() ? '<button type="button" id="migrate-uw-btn">표현의 모르는 단어 '+legacyUnknownCount()+'개 → 단어장으로 옮기기</button>' : '') +
         '<button type="button" id="reset-levels-btn">모든 항목 레벨 초기화</button>' +
         '<button type="button" id="logout-btn">로그아웃</button></div></div>';
     renderThemeRow();
@@ -1542,8 +1634,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   }
   function bindSettings(root){
     function $(id){ return root.querySelector('#' + id); }
-    var migBtn = $('migrate-uw-btn');
-    if (migBtn) migBtn.addEventListener('click', migrateUnknownWords);
     var resetBtn = $('reset-levels-btn');
     if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
     var logoutBtn = $('logout-btn');
@@ -1693,22 +1783,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var exprRowCounter = 0;
   function topicList(){
     var seen = {}, out = [];
-    data.expr.concat(data.vocab).forEach(function(it){
+    data.expr.forEach(function(it){
       var t = it.topic || '';
       if (t && !seen[t]){ seen[t] = true; out.push(t); }
     });
     return out;
-  }
-  function exprSetRowHtml(){
-    var n = ++exprRowCounter, pf = 'add-expr-r' + n;
-    return '<div class="expr-set" data-row="'+n+'">' +
-      '<div class="word-mini-row"><span class="expr-set-no">'+n+'</span>' +
-        '<input type="text" id="'+pf+'-expr" placeholder="표현" autocomplete="off">' +
-        '<input type="text" id="'+pf+'-meaning" placeholder="의미" autocomplete="off">' +
-        '<button type="button" class="icon-x" tabindex="-1" data-del-row="1" title="이 줄 삭제">×</button></div>' +
-      '<textarea id="'+pf+'-example" placeholder="예문 (선택)"></textarea>' +
-      '<textarea id="'+pf+'-mySentence" placeholder="나만의 문장 (선택)"></textarea>' +
-      aiBoxHtml(pf) + '</div>';
   }
   function uwRowHtml(){
     return '<div class="word-mini-row uw-row">' +
@@ -1717,31 +1796,40 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<input type="text" data-f="meaning" placeholder="뜻" autocomplete="off">' +
       '<button type="button" class="icon-x" tabindex="-1" data-del-row="1" title="이 줄 삭제">×</button></div>';
   }
+  function exprSetRowHtml(){
+    var n = ++exprRowCounter, pf = 'add-expr-r' + n;
+    return '<div class="expr-set" data-row="'+n+'">' +
+      '<div class="word-mini-row"><span class="expr-set-no">'+n+'</span>' +
+        '<input type="text" id="'+pf+'-expr" placeholder="표현" autocomplete="off">' +
+        '<input type="text" id="'+pf+'-meaning" placeholder="의미" autocomplete="off">' +
+        '<button type="button" class="icon-x" tabindex="-1" data-del-row="1" title="이 세트 삭제">×</button></div>' +
+      '<textarea rows="1" id="'+pf+'-example" placeholder="예문 (선택)"></textarea>' +
+      '<textarea rows="1" id="'+pf+'-mySentence" placeholder="나만의 문장 (선택)"></textarea>' +
+      aiBoxHtml(pf) +
+      '<div class="ew-label">이 표현의 모르는 단어</div>' +
+      '<div class="ew-list">' + uwRowHtml() + uwRowHtml() + '</div>' +
+      '<button type="button" class="ghost ew-add" data-add-ew="1">+ 단어</button></div>';
+  }
   function exprFormHtml(){
     var msg = state.exprSaveMsg;
     state.exprSaveMsg = '';
     exprRowCounter = 0;
     var dl = '<datalist id="expr-topic-list">' + topicList().map(function(t){ return '<option value="'+esc(t)+'">'; }).join('') + '</datalist>';
-    var rows = '', uws = '', i;
+    var rows = '', i;
     for (i = 0; i < 10; i++) rows += exprSetRowHtml();
-    for (i = 0; i < 10; i++) uws += uwRowHtml();
     return '<form class="entry" id="expr-form">' +
       (msg ? '<div class="full save-msg">'+esc(msg)+'</div>' : '') +
       '<div class="full"><label for="add-expr-topic">주제</label>' +
         '<input id="add-expr-topic" type="text" list="expr-topic-list" autocomplete="off" placeholder="예: 날씨, 여행 … (기존 주제를 고르면 거기에 이어서 추가돼요)">' + dl + '</div>' +
-      '<div class="full"><label>표현 세트 (표현 · 의미 · 예문 · 나만의 문장)</label>' +
+      '<div class="full"><label>표현 세트 (표현 · 의미 · 예문 · 나만의 문장 · 모르는 단어)</label>' +
         '<div class="word-mini-list" id="add-expr-rows">' + rows + '</div>' +
         '<button type="button" class="ghost" id="add-expr-addrow">+ 표현 추가</button></div>' +
-      '<div class="full"><label>이 주제의 모르는 단어 (저장하면 단어장에 들어가요)</label>' +
-        '<div class="word-mini-list" id="add-expr-uw">' + uws + '</div>' +
-        '<button type="button" class="ghost" id="add-expr-adduw">+ 단어 추가</button></div>' +
       '<div class="actions"><button type="submit" class="primary">이 주제 저장</button></div></form>';
   }
   function bindExprForm(){
     var form = document.getElementById('expr-form');
     var rowsEl = document.getElementById('add-expr-rows');
-    var uwEl = document.getElementById('add-expr-uw');
-    if (!form || !rowsEl || !uwEl) return;
+    if (!form || !rowsEl) return;
     function bindRowAi(rowEl){ bindAiCheck('expr', 'add-expr-r' + rowEl.getAttribute('data-row')); }
     rowsEl.querySelectorAll('.expr-set').forEach(bindRowAi);
     document.getElementById('add-expr-addrow').addEventListener('click', function(){
@@ -1751,15 +1839,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var inp = last.querySelector('input');
       if (inp) inp.focus();
     });
-    document.getElementById('add-expr-adduw').addEventListener('click', function(){
-      uwEl.insertAdjacentHTML('beforeend', uwRowHtml());
-      var inp = uwEl.lastElementChild.querySelector('input');
-      if (inp) inp.focus();
-    });
     form.addEventListener('click', function(e){
+      var add = e.target.closest && e.target.closest('[data-add-ew]');
+      if (add){
+        var set = add.closest('.expr-set');
+        var list = set && set.querySelector('.ew-list');
+        if (list){
+          list.insertAdjacentHTML('beforeend', uwRowHtml());
+          var inp = list.lastElementChild.querySelector('input');
+          if (inp) inp.focus();
+        }
+        return;
+      }
       var b = e.target.closest && e.target.closest('[data-del-row]');
       if (!b) return;
-      var row = b.closest('.expr-set, .uw-row');
+      var row = b.closest('.uw-row, .expr-set');
       if (row) row.remove();
     });
     form.addEventListener('submit', function(e){ e.preventDefault(); submitExprForm(); });
@@ -1772,7 +1866,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       existing[(it.topic || '') + '|' + (it.expr || '').trim()] = true;
       if ((it.topic || '') === topic && (it.seq || 0) > maxSeq) maxSeq = it.seq;
     });
-    var exprItems = [], skipE = 0;
+    var exprItems = [], skipE = 0, wordCount = 0;
     document.querySelectorAll('#add-expr-rows .expr-set').forEach(function(r){
       var pf = 'add-expr-r' + r.getAttribute('data-row');
       function v(k){ var el = document.getElementById(pf + '-' + k); return el ? el.value.trim() : ''; }
@@ -1781,32 +1875,24 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var key = topic + '|' + e;
       if (existing[key]){ skipE++; return; }
       existing[key] = true;
-      exprItems.push({ id:uid(), created:today, box:0, next:today, expr:e, meaning:v('meaning'), example:v('example'),
-        note:'', mySentence:v('mySentence'), topic:topic, seq:++maxSeq });
+      var words = [];
+      r.querySelectorAll('.uw-row').forEach(function(wr){
+        function wv(k){ var el = wr.querySelector('[data-f="' + k + '"]'); return el ? el.value.trim() : ''; }
+        var w = wv('word');
+        if (w) words.push({ id:uid(), word:w, reading:wv('reading'), meaning:wv('meaning') });
+      });
+      var item = { id:uid(), created:today, box:0, next:today, expr:e, meaning:v('meaning'), example:v('example'),
+        note:'', mySentence:v('mySentence'), topic:topic, seq:++maxSeq };
+      if (words.length){ item.unknownWords = words; wordCount += words.length; }
+      exprItems.push(item);
     });
-    var haveWords = {}, vocabItems = [], skipV = 0;
-    data.vocab.forEach(function(it){ haveWords[(it.word || '').trim()] = true; });
-    document.querySelectorAll('#add-expr-uw .uw-row').forEach(function(r){
-      function v(k){ var el = r.querySelector('[data-f="' + k + '"]'); return el ? el.value.trim() : ''; }
-      var w = v('word');
-      if (!w) return;
-      if (haveWords[w]){ skipV++; return; }
-      haveWords[w] = true;
-      vocabItems.push({ id:uid(), created:today, box:0, next:today, word:w, reading:v('reading'), meaning:v('meaning'),
-        example:'', note:'', mySentence:'', topic:topic, fromExpr:true });
-    });
-    if (!exprItems.length && !vocabItems.length){
-      alert(skipE || skipV ? '이미 등록된 내용이라 새로 저장할 게 없어요.' : '저장할 표현이나 단어를 먼저 입력해 주세요.');
+    if (!exprItems.length){
+      alert(skipE ? '이미 등록된 표현이라 새로 저장할 게 없어요.' : '저장할 표현을 먼저 입력해 주세요.');
       return;
     }
     exprItems.forEach(function(it){ data.expr.push(it); });
-    vocabItems.forEach(function(it){ data.vocab.push(it); });
-    if (exprItems.length) pushCategory('expr');
-    if (vocabItems.length) pushCategory('vocab');
-    var parts = [];
-    if (exprItems.length) parts.push('표현 ' + exprItems.length + '개');
-    if (vocabItems.length) parts.push('모르는 단어 ' + vocabItems.length + '개(단어장)');
-    state.exprSaveMsg = '✅ ' + parts.join(', ') + ' 저장했어요.' + ((skipE + skipV) ? ' (중복 ' + (skipE + skipV) + '개는 건너뜀)' : '');
+    pushCategory('expr');
+    state.exprSaveMsg = '✅ 표현 ' + exprItems.length + '개' + (wordCount ? ' (모르는 단어 ' + wordCount + '개 포함)' : '') + ' 저장했어요.' + (skipE ? ' (이미 있는 표현 ' + skipE + '개는 건너뜀)' : '');
     state.topicFilter = topic ? topic : null;
     state.sortMode.expr = 'topic';
     state.page.expr = 1;
@@ -2096,6 +2182,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
             (subField ? '<span class="reading">'+esc(subField)+'</span>' : '') +
             '<span class="meaning">'+esc(it.meaning||'')+'</span></div>' +
           '<div class="meta">' + boxDisplay(it) +
+            (cat === 'expr' && it.unknownWords && it.unknownWords.length ? '<span class="created-chip">📝 단어 '+it.unknownWords.length+'</span>' : '') +
             (it.topic && sortIsNotTopic(cat) ? '<span class="created-chip">📘 '+esc(it.topic)+'</span>' : '') +
             '<span class="created-chip">등록 '+shortDate(it.created)+'</span>' +
             (isWeak(it) ? '<span class="due-chip" title="자주 까먹은 항목">⚠️ '+it.wrongCount+'</span>' : '') +
@@ -2156,9 +2243,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
   function renderEditForm(cat, it){
     var prefix = 'edit-' + it.id;
-    var isExpr = false; // 표현의 모르는 단어는 이제 단어장(단어 탭)에 따로 저장돼요
+    var isExpr = cat === 'expr';
     var isKanji = cat === 'kanji';
-    var unknownRows = isExpr ? (it.unknownWords || []).map(function(w){ return { word:w.word||'', reading:w.reading||'', meaning:w.meaning||'' }; }) : [];
+    var unknownRows = isExpr ? (it.unknownWords || []).map(copyEword) : [];
     var readingGroups = isKanji ? getReadingGroups(it).map(function(g){
       // copyWord로 복사해서, 수정해도 예시 단어의 복습 기록(레벨/다음 복습일)이 유지되게 함
       return { type:g.type||'on', reading:g.reading||'', words:g.words.map(copyWord) };
@@ -2206,7 +2293,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (form) form.addEventListener('submit', function(e){
         e.preventDefault();
         var fields = readFormFields(cat, prefix);
-        if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); });
+        if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); }).map(function(w){ if (!w.id) w.id = uid(); return w; });
         if (isKanji) fields.readings = readingGroups
           .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
           .filter(function(g){ return g.reading || g.words.length; });
@@ -2256,6 +2343,77 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
   }
 
+  // ---------- 전체 검색 ----------
+  var gsResults = [];
+  function globalSearch(term){
+    term = term.trim().toLowerCase();
+    var out = [];
+    if (!term) return out;
+    Object.keys(CATS).forEach(function(cat){
+      data[cat].forEach(function(it){
+        if (searchableText(cat, it).indexOf(term) === -1) return;
+        var extra = '';
+        if (cat === 'expr'){
+          var base = ((it.expr || '') + ' ' + (it.meaning || '')).toLowerCase();
+          var hit = (it.unknownWords || []).find(function(w){
+            return ((w.word || '') + ' ' + (w.reading || '') + ' ' + (w.meaning || '')).toLowerCase().indexOf(term) !== -1;
+          });
+          if (hit && base.indexOf(term) === -1) extra = '📝 ' + hit.word + (hit.meaning ? ' · ' + hit.meaning : '');
+        }
+        out.push({ cat:cat, it:it, extra:extra });
+      });
+    });
+    return out;
+  }
+  function hideGlobalResults(){
+    var box = document.getElementById('global-results');
+    if (box){ box.classList.add('hidden'); box.innerHTML = ''; }
+    gsResults = [];
+  }
+  function renderGlobalResults(){
+    var input = document.getElementById('global-search');
+    var box = document.getElementById('global-results');
+    if (!input || !box) return;
+    var term = input.value;
+    if (!term.trim()){ hideGlobalResults(); return; }
+    gsResults = globalSearch(term);
+    var shown = gsResults.slice(0, 40);
+    var html = shown.map(function(r, i){
+      var it = r.it, cat = r.cat;
+      var title = String(it[TITLE_KEY[cat]] || '').split('\n')[0];
+      var subParts = [subDisplay(cat, it), String(it.meaning || '').split('\n')[0], r.extra, it.topic ? '📘 ' + it.topic : ''].filter(Boolean);
+      return '<div class="gs-row" data-gs="'+i+'"><span class="gs-cat '+CATS[cat].color+'">'+esc(CATS[cat].label)+'</span>' +
+        '<span class="gs-title">'+esc(title)+'</span><span class="gs-sub">'+esc(subParts.join(' · '))+'</span></div>';
+    }).join('');
+    if (!html) html = '<div class="gs-empty">검색 결과가 없어요.</div>';
+    else if (gsResults.length > shown.length) html += '<div class="gs-empty">'+gsResults.length+'개 중 '+shown.length+'개만 보여요. 검색어를 더 구체적으로 써보세요.</div>';
+    box.innerHTML = html;
+    box.classList.remove('hidden');
+    box.querySelectorAll('[data-gs]').forEach(function(row){
+      row.addEventListener('click', function(){
+        var r = gsResults[+row.getAttribute('data-gs')];
+        if (r) goToItem(r.cat, r.it, term.trim());
+      });
+    });
+  }
+  function goToItem(cat, it, term){
+    state.activeTab = cat;
+    state.search[cat] = term;
+    state.page[cat] = 1;
+    state.kanaFilter[cat] = null;
+    if (cat === 'expr') state.topicFilter = null;
+    state.openDetail[it.id] = true;
+    state.editMode[it.id] = false;
+    var input = document.getElementById('global-search');
+    if (input) input.value = '';
+    hideGlobalResults();
+    renderAll();
+    setTimeout(function(){
+      var el = document.getElementById('detail-' + it.id);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block:'center' });
+    }, 0);
+  }
+
   function renderAll(){
     renderThemeRow();
     renderTabs();
@@ -2289,6 +2447,15 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     auth.createUserWithEmailAndPassword(email, pw).catch(function(e){ setLoginError(e.message); });
   });
   document.getElementById('settings-btn').addEventListener('click', openSettings);
+  var gsInput = document.getElementById('global-search');
+  gsInput.addEventListener('input', renderGlobalResults);
+  gsInput.addEventListener('focus', function(){ if (gsInput.value.trim()) renderGlobalResults(); });
+  gsInput.addEventListener('keydown', function(e){
+    if (e.key === 'Escape'){ gsInput.value = ''; hideGlobalResults(); gsInput.blur(); }
+  });
+  document.addEventListener('click', function(e){
+    if (!(e.target.closest && e.target.closest('.global-search'))) hideGlobalResults();
+  });
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-overlay').addEventListener('click', function(e){
     if (e.target === this) closeSettings();
