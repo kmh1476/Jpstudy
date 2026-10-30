@@ -1979,6 +1979,20 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     state.pendingFocusCat = 'expr';
     renderAll();
   }
+    // 주제 이름 일괄 수정 (같은 이름이 이미 있으면 합치기)
+  function renameTopic(cat, oldName){
+    var nn = prompt('새 주제 이름', oldName);
+    if (nn === null) return;
+    nn = nn.trim();
+    if (!nn || nn === oldName) return;
+    var exists = data[cat].some(function(it){ return (it.topic || '') === nn; });
+    if (exists && !confirm('"' + nn + '" 주제가 이미 있어요. 두 주제를 합칠까요?')) return;
+    data[cat].forEach(function(it){ if ((it.topic || '') === oldName) it.topic = nn; });
+    if (state.lastTopic[cat] === oldName) state.lastTopic[cat] = nn;
+    state.topicFilter[cat] = nn;
+    pushCategory(cat);
+    renderAll();
+  }
   function renderTopicRow(cat){
     cat = cat || 'expr';
     var wrap = document.getElementById(cat + '-topic-row');
@@ -2006,6 +2020,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       state.page[cat] = 1;
       refreshListOnly(cat);
     });
+        if (tf[cat]){
+      var ren = document.createElement('button');
+      ren.type = 'button';
+      ren.className = 'secondary';
+      ren.textContent = '✏️ 주제 이름 수정';
+      ren.addEventListener('click', function(){ renameTopic(cat, tf[cat]); });
+      wrap.appendChild(ren);
+    }
   }
 
   // ---------- Category panels ----------
