@@ -80,6 +80,8 @@
   }
   header.top p.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; padding-right: 50px; }
   .sync-badge { color: var(--muted); font-size: 12px; display: block; margin-top: 4px; cursor: help; }
+  .badge-row { display: flex; flex-wrap: wrap; gap: 0 12px; margin-top: 4px; }
+  .badge-row .sync-badge { display: inline; margin-top: 0; }
   .logout-row { margin-top: 6px; }
   .logout-row button { font-size: 12px; }
 
@@ -90,7 +92,7 @@
   }
   .theme-dot.active { border-color: var(--ink); transform: scale(1.25); }
 
-  nav.tabs { display: flex; gap: 4px; margin-top: 16px; flex-wrap: wrap; border-bottom: 2px solid var(--line-strong); padding-bottom: 0; }
+  nav.tabs { display: flex; gap: 4px; margin-top: 12px; flex-wrap: nowrap; border-bottom: 2px solid var(--line-strong); padding-bottom: 0; }
   nav.tabs button {
     font-family: 'Noto Serif JP', serif; font-size: 14px; font-weight: 500; padding: 10px 16px 9px;
     background: var(--paper2); color: var(--muted); border: 1px solid var(--line-strong); border-bottom: none;
@@ -101,7 +103,6 @@
     background: var(--paper-card); color: var(--ink); font-weight: 700; top: 0;
     border-color: var(--line-strong); border-bottom: 2px solid var(--paper-card);
   }
-  nav.tabs button .badge { background: var(--hanko); color: #fff; border-radius: 2px; font-size: 11px; padding: 1px 6px; font-family: 'Noto Sans KR', sans-serif; }
   nav.tabs button:not(.active):hover { transform: translateY(-2px); }
 
   section.panel { background: var(--paper-card); border: 1px solid var(--line-strong); border-top: none; border-radius: 0 4px 4px 4px; padding: 22px; min-height: 300px; }
@@ -320,7 +321,7 @@
   .expr-set-no { font-size: 12px; color: var(--muted); width: 20px; flex-shrink: 0; text-align: center; }
   .save-msg { color: var(--jade); font-weight: 700; font-size: 13px; }
 
-  .global-search { position: relative; margin-top: 10px; }
+  .global-search { position: relative; margin-top: 8px; }
   .global-search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--paper-card); color: var(--ink); font-size: 14px; font-family: inherit; }
   #global-results { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 30; max-height: 60vh; overflow-y: auto; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
   .gs-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -363,6 +364,69 @@
     .word-mini-row { flex-wrap: wrap; }
     .row-value-grid { grid-template-columns: 1fr; }
   }
+
+  /* ===== UI 정리 ===== */
+  button { font-family: inherit; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
+
+  /* 버튼 3종: primary(채움) / secondary(테두리) / ghost(글자) */
+  button.primary, button.secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 0 18px; border-radius: 4px; font-size: 14px; line-height: 1.2; }
+  button.primary { font-weight: 700; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.15); }
+  button.secondary { background: var(--paper-card); border: 1px solid var(--line-strong); color: var(--ink); font-weight: 500; }
+  button.secondary:hover { background: var(--paper2); }
+  button.secondary.warn { color: var(--hanko); border-color: var(--hanko); }
+  .review-actions button { min-height: 42px; padding: 0 22px; border-radius: 4px; }
+
+  /* 칩(작은 선택 버튼) 통일 */
+  .sort-row button, .direction-row button, .pagination-row button, .kana-chip, .filter-toggle, .cat-review-chip {
+    min-height: 34px; padding: 0 12px; border-radius: 4px; font-size: 13px; line-height: 1.2;
+  }
+  .sort-row button, .direction-row button, .kana-chip, .filter-toggle { border: 1px solid var(--line-strong); background: var(--paper); color: var(--muted); cursor: pointer; }
+  .sort-row button.active, .direction-row button.active, .kana-chip.active { background: var(--ink); color: var(--paper-card); border-color: var(--ink); }
+  .cat-review-chip { border-width: 1px; }
+
+  /* 모서리 통일 */
+  .item-row, .item-detail, .review-card, .stats-panel, .reading-group, .search-input, .topic-select, form.entry input, form.entry textarea { border-radius: 4px; }
+
+  /* 항목 추가: 접이식 */
+  .add-toggle { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; margin-bottom: 14px; border: 1.5px dashed var(--line-strong); border-radius: 4px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 700; cursor: pointer; }
+  .add-toggle:hover { background: var(--paper2); }
+  .form-wrap { margin-top: -4px; }
+
+  /* 검색 + 정렬·필터 접기 */
+  .search-row { display: flex; gap: 8px; align-items: stretch; }
+  .search-row .search-input { flex: 1; min-width: 0; }
+  .filter-toggle { flex-shrink: 0; white-space: nowrap; }
+  .filter-toggle.on { border-color: var(--jade); color: var(--jade); font-weight: 700; }
+  .filter-box { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper2); }
+  .filter-box .topic-select { max-width: none; }
+
+  /* 복습 첫 화면 */
+  .review-start-row { gap: 8px; }
+  .review-start-row button { flex: 1 1 200px; }
+  .review-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px; margin: 14px 0 4px; }
+  .review-card { padding: 8px 10px; }
+  .review-card .n { font-size: 20px; }
+  details.fold { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--paper); margin-top: 12px; }
+  details.fold > summary { list-style: none; cursor: pointer; padding: 12px 14px; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::after { content: '▾'; color: var(--muted); }
+  details.fold[open] > summary::after { content: '▴'; }
+  details.fold .fold-body { padding: 0 14px 14px; }
+  details.fold .fold-body > .direction-row:first-child { margin-top: 0; }
+  .stats-panel { margin-top: 12px; margin-bottom: 0; }
+
+  @media (max-width: 560px) {
+    #app { padding: 12px 10px 48px; }
+    section.panel { padding: 14px 12px; }
+    header.top { margin-bottom: 12px; }
+    header.top h1 { font-size: 20px; }
+    header.top p.sub { display: none; }
+    nav.tabs button { flex: 1 1 auto; justify-content: center; white-space: nowrap; padding: 9px 4px 8px; font-size: 13px; }
+    .item-row { padding: 10px 12px; }
+    .flashcard { padding: 26px 14px; }
+  }
 </style>
 </head>
 <body>
@@ -390,8 +454,7 @@
       <span class="stamp">帳</span>
     </div>
     <p class="sub">단어 · 한자 · 문법 · 표현 — 매일 쓰고, 때 되면 다시 꺼내보기</p>
-    <span class="sync-badge" id="sync-badge" title="Firebase Firestore에 실시간으로 저장돼요.">☁️ 동기화됨</span>
-    <span class="sync-badge" id="streak-badge"></span>
+    <div class="badge-row"><span class="sync-badge" id="sync-badge" title="Firebase Firestore에 실시간으로 저장돼요.">☁️ 동기화됨</span><span class="sync-badge" id="streak-badge"></span></div>
     <div class="global-search"><input type="search" id="global-search" placeholder="🔍 전체 검색 (단어 · 한자 · 문법 · 표현 · 주제)" autocomplete="off"><div id="global-results" class="hidden"></div></div>
     <button type="button" class="settings-gear" id="settings-btn" title="설정" aria-label="설정">⚙️</button>
     <nav class="tabs" id="tabs"></nav>
@@ -1131,10 +1194,9 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var btn = document.createElement('button');
       btn.className = 'tab-btn' + (state.activeTab === key ? ' active' : '');
       var label = key === 'review' ? '오늘의 복습' : CATS[key].label;
-      var due = key === 'review' ? totalDue() : dueCount(key);
-      btn.innerHTML = esc(label) + (due > 0 ? ' <span class="badge">'+due+'</span>' : '');
+      btn.textContent = label;
       btn.addEventListener('click', function(){
-        if (key !== state.activeTab) state.openDetail = {};  // 다른 탭으로 이동하면 펼쳐진 항목은 다시 접기
+        if (key !== state.activeTab){ state.openDetail = {}; state.formOpen = {}; }  // 다른 탭으로 이동하면 펼쳐진 항목은 다시 접기
         state.activeTab = key;
         if (key === 'review'){ state.reviewQueue = null; state.reviewIdx = 0; state.reviewFlipped = false; }
         renderAll();
@@ -1292,6 +1354,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
     renderAll();
   }
+  // 접었다 펼 수 있는 구역 (상태는 state.fold에 기억해서 화면을 다시 그려도 유지)
+  function foldBlock(key, title, inner){
+    if (!inner) return '';
+    return '<details class="fold" data-fold="'+key+'"'+((state.fold && state.fold[key]) ? ' open' : '')+'><summary>'+title+'</summary><div class="fold-body">'+inner+'</div></details>';
+  }
   function renderStatsPanel(){
     var levels = [0,0,0,0,0,0,0];
     var total = 0;
@@ -1377,11 +1444,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var due = totalDue(), all = totalAll(), weak = totalWeak();
       var dueForToday = (state.dailyCap !== 'all' && due > state.dailyCap) ? state.dailyCap : due;
       var buttons = '';
+      var missedN = getMissed().length;
       if (due > 0){
         var dueLabel = dueForToday+'개';
         buttons += '<button class="primary" id="start-due">오늘 복습 시작 ('+dueLabel+')</button>';
       }
+      if (missedN > 0) buttons += '<button class="'+(due > 0 ? 'secondary warn' : 'primary')+'" id="start-retry">🔁 오늘 까먹은 항목 다시 풀기 ('+missedN+'개)</button>';
       if (all > 0) buttons += '<button class="secondary" id="start-all">전체 항목 복습하기 ('+all+'개)</button>';
+      if (weak > 0) buttons += '<button class="secondary" id="start-weak">⚠️ 취약 항목만 복습 ('+weak+'개)</button>';
       var catChips = Object.keys(CATS).map(function(c){
         var n = data[c].length;
         if (!n) return '';
@@ -1410,22 +1480,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       }
       var lc = listenCount();
       if (lc) catChips += '<button class="cat-review-chip" style="color:var(--ink)" data-cat-review="listen">🎧 듣기 <span>'+lc+'</span></button>';
-      var extraButtons = '';
-      var missedN = getMissed().length;
-      if (missedN > 0) extraButtons += '<button class="primary" id="start-retry">🔁 오늘 까먹은 항목 다시 풀기 ('+missedN+'개)</button>';
-      if (weak > 0) extraButtons += '<button class="secondary" id="start-weak">⚠️ 취약 항목만 복습 ('+weak+'개)</button>';
 
-      panel.innerHTML = renderStatsPanel() +
-        '<div class="review-summary">'+summaryHtml+'</div>' +
+      var pickInner = (catChips ? '<div class="cat-review-block" style="margin-top:0;"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') + topicBlock;
+      var settingsInner = renderKwordToggle() + renderEwordToggle() + renderSpeakToggle() + renderCapRow() + renderDirectionRow();
+      panel.innerHTML =
         (buttons ? '<div class="review-start-row">'+buttons+'</div>' : '<div class="empty-note">아직 항목이 없어요. 각 챕터에서 새 항목을 추가해보세요.</div>') +
-        (catChips ? '<div class="cat-review-block"><div class="cat-review-label">항목별 복습</div><div class="cat-review-row">'+catChips+'</div></div>' : '') +
-        topicBlock +
-        (extraButtons ? '<div class="review-start-row" style="margin-top:10px;">'+extraButtons+'</div>' : '') +
-        renderKwordToggle() +
-        renderEwordToggle() +
-        renderSpeakToggle() +
-        renderCapRow() +
-        renderDirectionRow();
+        '<div class="review-summary">'+summaryHtml+'</div>' +
+        foldBlock('pick', '🎯 골라서 복습', pickInner) +
+        foldBlock('settings', '⚙ 복습 설정', settingsInner) +
+        renderStatsPanel();
+      panel.querySelectorAll('details[data-fold]').forEach(function(d){
+        d.addEventListener('toggle', function(){
+          if (!state.fold) state.fold = {};
+          state.fold[d.getAttribute('data-fold')] = d.open;
+        });
+      });
       panel.querySelectorAll('[data-topic-select]').forEach(function(sel){
         sel.addEventListener('change', function(){
           if (!sel.value) return;
@@ -2146,15 +2215,42 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       formHtml += '<div class="actions"><button type="submit" class="primary">'+ADD_LABEL[cat]+'</button></div></form>';
     }
 
+    if (!state.formOpen) state.formOpen = {};
+    if (!state.filterOpen) state.filterOpen = {};
     var controlsHtml = '<div class="list-controls">' +
-      '<input type="text" class="search-input" id="'+cat+'-search" placeholder="검색 (단어·뜻·읽기·주제 등)" value="'+esc(state.search[cat]||'')+'">' +
-      (isTopicCat(cat) ? '<div class="kana-row" id="'+cat+'-topic-row"></div>' : '') +
-      '<div class="sort-row" id="'+cat+'-sort-row"></div>' +
-      '<div class="kana-row" id="'+cat+'-kana-row"></div>' +
+      '<div class="search-row">' +
+        '<input type="text" class="search-input" id="'+cat+'-search" placeholder="검색 (단어·뜻·읽기·주제 등)" value="'+esc(state.search[cat]||'')+'">' +
+        '<button type="button" class="filter-toggle" id="'+cat+'-filter-toggle"></button>' +
+      '</div>' +
+      '<div class="filter-box'+(state.filterOpen[cat] ? '' : ' hidden')+'" id="'+cat+'-filter-box">' +
+        (isTopicCat(cat) ? '<div class="kana-row" id="'+cat+'-topic-row"></div>' : '') +
+        '<div class="sort-row" id="'+cat+'-sort-row"></div>' +
+        '<div class="kana-row" id="'+cat+'-kana-row"></div>' +
+      '</div>' +
       '</div>' +
       '<div id="'+cat+'-list-container">' + renderListMarkup(cat) + '</div>';
 
-    panel.innerHTML = formHtml + controlsHtml;
+    var formOpen = !!state.formOpen[cat];
+    var addToggleHtml = '<button type="button" class="add-toggle" id="'+cat+'-add-toggle">'+(formOpen ? '✕ 닫기' : '＋ '+ADD_LABEL[cat])+'</button>' +
+      '<div class="form-wrap'+(formOpen ? '' : ' hidden')+'" id="'+cat+'-form-wrap">' + formHtml + '</div>';
+
+    panel.innerHTML = addToggleHtml + controlsHtml;
+    updateFilterBtn(cat);
+    document.getElementById(cat + '-add-toggle').addEventListener('click', function(){
+      var wrap = document.getElementById(cat + '-form-wrap');
+      var willOpen = wrap.classList.contains('hidden');
+      state.formOpen[cat] = willOpen;
+      wrap.classList.toggle('hidden', !willOpen);
+      this.textContent = willOpen ? '✕ 닫기' : '＋ ' + ADD_LABEL[cat];
+      if (willOpen) focusAddForm(cat);
+    });
+    document.getElementById(cat + '-filter-toggle').addEventListener('click', function(){
+      var box = document.getElementById(cat + '-filter-box');
+      var willOpen = box.classList.contains('hidden');
+      state.filterOpen[cat] = willOpen;
+      box.classList.toggle('hidden', !willOpen);
+      updateFilterBtn(cat);
+    });
     renderSortRow(cat);
     renderKanaRow(cat);
     if (isTopicCat(cat)) renderTopicRow(cat);
@@ -2206,9 +2302,21 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
 
     if (state.pendingFocusCat === cat){
       state.pendingFocusCat = null;
-      var firstField = isTopic ? document.getElementById('add-expr-topic') : document.getElementById(prefix + '-' + TITLE_KEY[cat]);
-      if (firstField) firstField.focus();
+      focusAddForm(cat);   // 연속 입력: 저장하면 폼은 열린 채로 첫 칸에 커서가 돌아감
     }
+  }
+  function focusAddForm(cat){
+    var el = cat === 'expr' ? document.getElementById('add-expr-topic') : document.getElementById('add-' + cat + '-' + TITLE_KEY[cat]);
+    if (el) el.focus();
+  }
+  function updateFilterBtn(cat){
+    var b = document.getElementById(cat + '-filter-toggle');
+    if (!b) return;
+    var n = 0;
+    if (isTopicCat(cat) && state.topicFilter[cat] !== null && state.topicFilter[cat] !== undefined) n++;
+    if (state.kanaFilter[cat]) n++;
+    b.textContent = '⚙ 정렬·필터' + (n ? ' · ' + n : '') + (state.filterOpen && state.filterOpen[cat] ? ' ▴' : ' ▾');
+    b.classList.toggle('on', n > 0);
   }
 
   function renderSortRow(cat){
@@ -2252,6 +2360,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (isTopicCat(cat)) renderTopicRow(cat);
     container.innerHTML = renderListMarkup(cat);
     bindListEvents(cat);
+    updateFilterBtn(cat);
   }
 
   function boxDisplay(it){ return '<span class="box-chip">Lv.'+ (it.box+1) +'</span>'; }
