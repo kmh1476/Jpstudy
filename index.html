@@ -935,17 +935,61 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function undoLastReview(){
     if (!state.reviewQueue || !state.reviewHistory.length) return;
     var last = state.reviewHistory.pop();
-    restoreSnapshot(last.snap);
+    if (last.snap) restoreSnapshot(last.snap);
+    if (last.cur) setMissed(last.cur, !!last.wasMissed);
     state.reviewIdx = last.idx;
     state.reviewFlipped = true;     // 되돌린 카드는 답이 보이는 상태로 돌아와서 바로 다시 채점 가능
     state.spokenIdx = last.idx;     // 되돌릴 때는 소리 자동 재생 안 함
     renderReview();
   }
+  // ---- 오답 다시 풀기: 오늘 '까먹었어요'를 누른 항목을 모아뒀다가 같은 날 한 번 더 출제 ----
+  // 다시 풀기 라운드의 결과는 복습 기록(레벨/다음 복습일)에 반영하지 않고, 기억나요를 누르면 오답 목록에서 빠짐.
+  function missedKey(cur){ return cur.eword ? 'e:' + cur.key : (cur.kword ? 'k:' + cur.key : cur.cat + ':' + cur.item.id); }
+  function getMissed(){
+    var today = todayStr();
+    if (!state.reviewMissed || state.reviewMissedDate !== today){ state.reviewMissed = []; state.reviewMissedDate = today; }
+    return state.reviewMissed;
+  }
+  function isMissed(cur){
+    var k = missedKey(cur);
+    return getMissed().some(function(c){ return missedKey(c) === k; });
+  }
+  function setMissed(cur, on){
+    var k = missedKey(cur), list = getMissed();
+    var idx = -1;
+    list.forEach(function(c, i){ if (idx < 0 && missedKey(c) === k) idx = i; });
+    if (on && idx < 0) list.push(cur);
+    else if (!on && idx >= 0) list.splice(idx, 1);
+  }
+  function startRetry(){
+    var q = getMissed().map(function(c){
+      if (c.kword || c.eword) return c;
+      var fresh = data[c.cat].find(function(x){ return x.id === c.item.id; });
+      if (!fresh) return null;
+      var copy = {}; Object.keys(c).forEach(function(k){ copy[k] = c[k]; });
+      copy.item = fresh;
+      return copy;
+    }).filter(Boolean);
+    if (!q.length) return;
+    state.reviewQueue = shuffle(q);
+    state.reviewHistory = [];
+    state.spokenIdx = -1;
+    state.reviewIdx = 0;
+    state.reviewFlipped = false;
+    state.reviewRetry = true;
+    renderReview();
+  }
   function applyReview(cur, remembered){
-    state.reviewHistory.push({ idx: state.reviewIdx, snap: snapshotFor(cur) });
-    if (cur.kword) reviewKanjiWord(cur.key, remembered);
-    else if (cur.eword) reviewExprWord(cur.key, remembered);
-    else reviewResult(cur.cat, cur.item.id, remembered);
+    var wasMissed = isMissed(cur);
+    if (state.reviewRetry){
+      state.reviewHistory.push({ idx: state.reviewIdx, snap: null, cur: cur, wasMissed: wasMissed });
+    } else {
+      state.reviewHistory.push({ idx: state.reviewIdx, snap: snapshotFor(cur), cur: cur, wasMissed: wasMissed });
+      if (cur.kword) reviewKanjiWord(cur.key, remembered);
+      else if (cur.eword) reviewExprWord(cur.key, remembered);
+      else reviewResult(cur.cat, cur.item.id, remembered);
+    }
+    setMissed(cur, !remembered);
   }
 
   // ---- 백업 내보내기 / 불러오기 ----
@@ -1090,6 +1134,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var due = key === 'review' ? totalDue() : dueCount(key);
       btn.innerHTML = esc(label) + (due > 0 ? ' <span class="badge">'+due+'</span>' : '');
       btn.addEventListener('click', function(){
+        if (key !== state.activeTab) state.openDetail = {};  // 다른 탭으로 이동하면 펼쳐진 항목은 다시 접기
         state.activeTab = key;
         if (key === 'review'){ state.reviewQueue = null; state.reviewIdx = 0; state.reviewFlipped = false; }
         renderAll();
@@ -1201,6 +1246,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     state.spokenIdx = -1;
     state.reviewIdx = 0;
     state.reviewFlipped = false;
+    state.reviewRetry = false;
     renderReview();
   }
   function backRowsFor(cat, it){
@@ -1365,6 +1411,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var lc = listenCount();
       if (lc) catChips += '<button class="cat-review-chip" style="color:var(--ink)" data-cat-review="listen">🎧 듣기 <span>'+lc+'</span></button>';
       var extraButtons = '';
+      var missedN = getMissed().length;
+      if (missedN > 0) extraButtons += '<button class="primary" id="start-retry">🔁 오늘 까먹은 항목 다시 풀기 ('+missedN+'개)</button>';
       if (weak > 0) extraButtons += '<button class="secondary" id="start-weak">⚠️ 취약 항목만 복습 ('+weak+'개)</button>';
 
       panel.innerHTML = renderStatsPanel() +
@@ -1412,6 +1460,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       if (dueBtn) dueBtn.addEventListener('click', function(){ startReview('due'); });
       var allBtn = document.getElementById('start-all');
       if (allBtn) allBtn.addEventListener('click', function(){ startReview('all'); });
+      var retryBtn = document.getElementById('start-retry');
+      if (retryBtn) retryBtn.addEventListener('click', startRetry);
       var weakBtn = document.getElementById('start-weak');
       if (weakBtn) weakBtn.addEventListener('click', function(){ startReview('weak'); });
       panel.querySelectorAll('[data-cap]').forEach(function(btn){
@@ -1432,12 +1482,19 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     }
     if (state.reviewIdx >= state.reviewQueue.length){
       var remainingAll = totalAll();
-      panel.innerHTML = '<div class="review-done"><h3 class="serif">복습 끝!</h3><p>수고하셨어요.</p>' +
+      var missedLeft = getMissed().length;
+      var doneMsg = missedLeft
+        ? '<p>까먹은 항목이 <b>'+missedLeft+'개</b> 있어요. 지금 바로 한 번 더 풀어볼까요?</p>'
+        : (state.reviewRetry ? '<p>오답을 전부 맞혔어요! 🎉</p>' : '<p>수고하셨어요.</p>');
+      panel.innerHTML = '<div class="review-done"><h3 class="serif">'+(state.reviewRetry ? '오답 복습 끝!' : '복습 끝!')+'</h3>'+doneMsg +
         '<div class="review-actions">' +
+        (missedLeft ? '<button class="primary" id="retry-missed">🔁 오답 '+missedLeft+'개 다시 풀기</button>' : '') +
         (state.reviewHistory.length ? '<button class="secondary" id="undo-btn">↩ 마지막 카드 되돌리기</button>' : '') +
         (remainingAll > 0 ? '<button class="secondary" id="continue-all">전체 항목으로 이어서 복습</button>' : '') +
         '<button class="secondary" id="back-summary">돌아가기</button>' +
         '</div></div>';
+      var retryMissedBtn = document.getElementById('retry-missed');
+      if (retryMissedBtn) retryMissedBtn.addEventListener('click', startRetry);
       var doneUndo = document.getElementById('undo-btn');
       if (doneUndo) doneUndo.addEventListener('click', undoLastReview);
       var contBtn = document.getElementById('continue-all');
@@ -1474,7 +1531,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (state.reviewFlipped && !cur.kword && it.topic && (cat === 'expr' || cat === 'vocab' || cat === 'grammar')) tagLabel += ' · ' + it.topic;
     if (cur.kword) tagLabel = '한자 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : ''));
     if (cur.eword) tagLabel = '표현 단어' + (isListen ? ' · 듣기' : (isReverse ? ' · 뜻→일본어' : '')) + (state.reviewFlipped && it.topic ? ' · ' + it.topic : '');
-    var progress = (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
+    var progress = (state.reviewRetry ? '🔁 오답 다시 풀기 · ' : '') + (state.reviewIdx+1) + ' / ' + state.reviewQueue.length;
 
     var html = '<div style="text-align:right;color:var(--muted);font-size:13px;margin-bottom:6px;">'+progress+'</div>';
     html += '<div class="flashcard" id="flashcard-el"><div class="cat-tag '+(cur.kword ? 'cat-kanji' : CATS[cat].color)+'">'+esc(tagLabel)+'</div>';
@@ -2510,6 +2567,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     panel.querySelectorAll('[data-page]').forEach(function(btn){
       btn.addEventListener('click', function(){
         var dir = btn.getAttribute('data-page');
+        state.openDetail = {};  // 페이지를 넘기면 펼쳐진 항목은 다시 접기
         if (dir === 'first') state.page[cat] = 1;
         else if (dir === 'last') state.page[cat] = Math.max(1, Math.ceil(filteredSortedItems(cat).length / PAGE_SIZE));
         else state.page[cat] += (dir === 'next') ? 1 : -1;
@@ -2834,6 +2892,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       state.theme = document.documentElement.getAttribute('data-theme');
       state.activeTab = 'review'; state.reviewQueue = null; state.reviewIdx = 0; state.reviewFlipped = false;
       state.openDetail = {}; state.editMode = {};
+      state.reviewMissed = []; state.reviewRetry = false;
       showApp();
       renderAll();
       attachFirestore(user.uid);
