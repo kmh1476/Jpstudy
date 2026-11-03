@@ -323,12 +323,35 @@
   .global-search { position: relative; margin-top: 10px; }
   .global-search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--paper-card); color: var(--ink); font-size: 14px; font-family: inherit; }
   #global-results { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 30; max-height: 60vh; overflow-y: auto; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,0.18); }
-  .gs-row { display: flex; align-items: baseline; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .gs-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
   .gs-row:hover { background: var(--paper2); }
   .gs-cat { font-size: 11px; font-weight: 700; flex-shrink: 0; border: 1px solid currentColor; border-radius: 2px; padding: 0 5px; }
   .gs-title { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; flex-shrink: 0; }
   .gs-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
   .gs-empty { padding: 12px; color: var(--muted); font-size: 13px; }
+  /* 검색어 형광펜 표시 + 어디에 걸렸는지 보여주는 줄 */
+  .gs-hl { background: rgba(255, 224, 51, 0.65); color: inherit; border-radius: 2px; padding: 0 1px; }
+  :root[data-theme="dark"] .gs-hl { background: rgba(255, 214, 0, 0.38); }
+  .gs-hit { flex: 0 0 100%; font-size: 12px; line-height: 1.55; color: var(--ink); padding-left: 2px; word-break: break-word; }
+  .gs-hit-item { margin-right: 12px; display: inline-block; }
+  .gs-hit-item b { color: var(--muted); font-weight: 700; margin-right: 4px; }
+  .gs-more { position: sticky; bottom: 0; padding: 11px 12px; text-align: center; font-size: 13px; font-weight: 700; cursor: pointer; background: var(--paper2); border-top: 1px solid var(--line-strong); color: var(--ink); }
+  .gs-more:hover { background: var(--line); }
+
+  /* 전체 검색 결과 화면 */
+  #gs-full-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,0.45); z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 24px 14px; overflow-y: auto; }
+  .gsf-box { width: 100%; max-width: 760px; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 4px; padding: 18px 20px 22px; }
+  .gsf-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .gsf-head h2 { margin: 0; font-size: 20px; }
+  .gsf-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 10px; }
+  .gsf-tab { font-size: 13px; padding: 6px 12px; border-radius: 3px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--muted); cursor: pointer; font-family: inherit; }
+  .gsf-tab .n { font-size: 11px; margin-left: 4px; opacity: 0.85; }
+  .gsf-tab.active { background: var(--ink); color: var(--paper-card); border-color: var(--ink); }
+  .gsf-tab.zero:not(.active) { opacity: 0.5; }
+  .gsf-list { border: 1px solid var(--line); border-bottom: none; }
+  .gsf-list .gs-title { white-space: normal; overflow: visible; max-width: 45%; }
+  .gsf-list .gs-sub { white-space: normal; overflow: visible; }
+  .gsf-more-btn { display: block; width: 100%; padding: 11px; border: 1px solid var(--line-strong); border-top: none; background: var(--paper2); color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
@@ -388,6 +411,18 @@
       <button type="button" class="secondary" id="settings-close">닫기</button>
     </div>
     <div id="settings-body"></div>
+  </div>
+</div>
+
+<div id="gs-full-overlay" class="hidden">
+  <div class="gsf-box" role="dialog" aria-label="전체 검색 결과">
+    <div class="gsf-head">
+      <h2 class="serif">🔍 전체 검색 결과</h2>
+      <button type="button" class="secondary" id="gsf-close">닫기</button>
+    </div>
+    <input type="search" id="gsf-input" class="search-input" placeholder="검색어" autocomplete="off">
+    <div class="gsf-tabs" id="gsf-tabs"></div>
+    <div id="gsf-list" class="gsf-list"></div>
   </div>
 </div>
 
@@ -2492,15 +2527,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     Object.keys(CATS).forEach(function(cat){
       data[cat].forEach(function(it){
         if (searchableText(cat, it).indexOf(term) === -1) return;
-        var extra = '';
-        if (cat === 'expr'){
-          var base = ((it.expr || '') + ' ' + (it.meaning || '')).toLowerCase();
-          var hit = (it.unknownWords || []).find(function(w){
-            return ((w.word || '') + ' ' + (w.reading || '') + ' ' + (w.meaning || '')).toLowerCase().indexOf(term) !== -1;
-          });
-          if (hit && base.indexOf(term) === -1) extra = '📝 ' + hit.word + (hit.meaning ? ' · ' + hit.meaning : '');
-        }
-        out.push({ cat:cat, it:it, extra:extra });
+        out.push({ cat:cat, it:it });
       });
     });
     return out;
@@ -2510,31 +2537,83 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     if (box){ box.classList.add('hidden'); box.innerHTML = ''; }
     gsResults = [];
   }
+  // 검색어를 형광펜(<mark>)으로 표시 — HTML 이스케이프 포함
+  function hl(text, tl){
+    text = (text == null) ? '' : String(text);
+    if (!tl) return esc(text);
+    var low = text.toLowerCase();
+    if (low.length !== text.length) return esc(text);
+    var out = '', pos = 0, k;
+    while ((k = low.indexOf(tl, pos)) !== -1){
+      out += esc(text.slice(pos, k)) + '<mark class="gs-hl">' + esc(text.slice(k, k + tl.length)) + '</mark>';
+      pos = k + tl.length;
+    }
+    return out + esc(text.slice(pos));
+  }
+  // 긴 글은 검색어 주변만 잘라서 보여줌
+  function gsSnippet(text, tl){
+    text = String(text || '').replace(/\s+/g, ' ').trim();
+    if (text.length <= 60) return text;
+    var k = text.toLowerCase().indexOf(tl);
+    if (k < 0) return text.slice(0, 60) + '…';
+    var a = Math.max(0, k - 20), b = Math.min(text.length, k + tl.length + 30);
+    return (a > 0 ? '…' : '') + text.slice(a, b) + (b < text.length ? '…' : '');
+  }
+  // 제목/뜻/읽기/주제처럼 행에 원래 보이는 필드 말고, 숨은 곳(메모·예시단어 등)에서 걸린 경우를 알려줌
+  function gsMatches(cat, it, tl){
+    var out = [];
+    function has(v){ return v && String(v).toLowerCase().indexOf(tl) !== -1; }
+    function wordText(w){
+      return (w.word || '') + (w.reading ? '(' + w.reading + ')' : '') + (w.meaning ? ' ' + String(w.meaning).replace(/\s+/g, ' ') : '');
+    }
+    function pushWords(label, words){
+      var hits = words.filter(function(w){ return has(w.word) || has(w.reading) || has(w.meaning); });
+      if (!hits.length) return;
+      var txt = hits.slice(0, 4).map(wordText).join(' · ');
+      if (hits.length > 4) txt += ' 외 ' + (hits.length - 4) + '개';
+      out.push({ label: label, text: txt });
+    }
+    if (has(it.note)) out.push({ label: '메모', text: gsSnippet(it.note, tl) });
+    if (cat === 'grammar' && has(it.conjugation)) out.push({ label: '접속', text: gsSnippet(it.conjugation, tl) });
+    if (cat === 'kanji'){
+      var all = [];
+      getReadingGroups(it).forEach(function(g){ (g.words || []).forEach(function(w){ all.push(w); }); });
+      pushWords('예시단어', all);
+    }
+    if (cat === 'expr' && it.unknownWords) pushWords('모르는 단어', it.unknownWords);
+    return out;
+  }
+  function gsRowHtml(r, attr, tl){
+    var it = r.it, cat = r.cat;
+    // 여러 줄 항목(예: 来る / する)은 검색어에 걸린 줄을 앞으로 보내고 전부 이어서 보여줌
+    function joinLines(text){
+      var lines = String(text || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+      var hit = lines.filter(function(s){ return s.toLowerCase().indexOf(tl) !== -1; });
+      var rest = lines.filter(function(s){ return s.toLowerCase().indexOf(tl) === -1; });
+      return hit.concat(rest).join(' / ');
+    }
+    var title = joinLines(it[TITLE_KEY[cat]]);
+    var subParts = [subDisplay(cat, it), joinLines(it.meaning), it.topic ? '📘 ' + it.topic : ''].filter(Boolean);
+    var hits = gsMatches(cat, it, tl);
+    var hitHtml = hits.length ? '<div class="gs-hit">↳ ' + hits.map(function(h){
+      return '<span class="gs-hit-item"><b>' + esc(h.label) + '</b>' + hl(h.text, tl) + '</span>';
+    }).join('') + '</div>' : '';
+    return '<div class="gs-row" ' + attr + '><span class="gs-cat ' + CATS[cat].color + '">' + esc(CATS[cat].label) + '</span>' +
+      '<span class="gs-title">' + hl(title, tl) + '</span><span class="gs-sub">' + hl(subParts.join(' · '), tl) + '</span>' + hitHtml + '</div>';
+  }
   function renderGlobalResults(){
     var input = document.getElementById('global-search');
     var box = document.getElementById('global-results');
     if (!input || !box) return;
     var term = input.value;
     if (!term.trim()){ hideGlobalResults(); return; }
+    var tl = term.trim().toLowerCase();
     gsResults = globalSearch(term);
     var shown = gsResults.slice(0, 40);
-    var html = shown.map(function(r, i){
-      var it = r.it, cat = r.cat;
-      // 여러 줄 항목(예: 来る / する)은 검색어에 걸린 줄을 앞으로 보내고 전부 이어서 보여줌
-      var tl = term.trim().toLowerCase();
-      function joinLines(text){
-        var lines = String(text || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
-        var hit = lines.filter(function(s){ return s.toLowerCase().indexOf(tl) !== -1; });
-        var rest = lines.filter(function(s){ return s.toLowerCase().indexOf(tl) === -1; });
-        return hit.concat(rest).join(' / ');
-      }
-      var title = joinLines(it[TITLE_KEY[cat]]);
-      var subParts = [subDisplay(cat, it), joinLines(it.meaning), r.extra, it.topic ? '📘 ' + it.topic : ''].filter(Boolean);
-      return '<div class="gs-row" data-gs="'+i+'"><span class="gs-cat '+CATS[cat].color+'">'+esc(CATS[cat].label)+'</span>' +
-        '<span class="gs-title">'+esc(title)+'</span><span class="gs-sub">'+esc(subParts.join(' · '))+'</span></div>';
-    }).join('');
+    var html = shown.map(function(r, i){ return gsRowHtml(r, 'data-gs="' + i + '"', tl); }).join('');
     if (!html) html = '<div class="gs-empty">검색 결과가 없어요.</div>';
-    else if (gsResults.length > shown.length) html += '<div class="gs-empty">'+gsResults.length+'개 중 '+shown.length+'개만 보여요. 검색어를 더 구체적으로 써보세요.</div>';
+    else html += '<div class="gs-more" id="gs-open-full">🔎 전체 검색 결과 보기 (' + gsResults.length + '개' +
+      (gsResults.length > shown.length ? ' 중 ' + shown.length + '개만 표시 중' : '') + ')</div>';
     box.innerHTML = html;
     box.classList.remove('hidden');
     box.querySelectorAll('[data-gs]').forEach(function(row){
@@ -2543,7 +2622,53 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         if (r) goToItem(r.cat, r.it, term.trim());
       });
     });
+    var more = document.getElementById('gs-open-full');
+    if (more) more.addEventListener('click', function(){ openFullResults(term.trim()); });
   }
+
+  // ---------- 전체 검색 결과 화면 (탭별) ----------
+  var GSF_PAGE = 100;
+  var GSF_TABS = ['all', 'vocab', 'kanji', 'grammar', 'expr'];
+  var gsf = { term: '', tab: 'all', limit: GSF_PAGE, list: [] };
+  function openFullResults(term){
+    gsf.term = term; gsf.tab = 'all'; gsf.limit = GSF_PAGE;
+    hideGlobalResults();
+    var gi = document.getElementById('global-search');
+    if (gi) gi.blur();
+    document.getElementById('gsf-input').value = term;
+    document.getElementById('gs-full-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    renderFullResults();
+    document.getElementById('gs-full-overlay').scrollTop = 0;
+  }
+  function closeFullResults(){
+    document.getElementById('gs-full-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  function renderFullResults(){
+    var tabsEl = document.getElementById('gsf-tabs');
+    var listEl = document.getElementById('gsf-list');
+    var term = gsf.term;
+    var tl = term.trim().toLowerCase();
+    var results = tl ? globalSearch(term) : [];
+    var counts = { all: results.length, vocab: 0, kanji: 0, grammar: 0, expr: 0 };
+    results.forEach(function(r){ counts[r.cat]++; });
+    tabsEl.innerHTML = GSF_TABS.map(function(t){
+      var label = t === 'all' ? '전체' : CATS[t].label;
+      return '<button type="button" class="gsf-tab' + (gsf.tab === t ? ' active' : '') + (counts[t] ? '' : ' zero') + '" data-tab="' + t + '">' +
+        esc(label) + '<span class="n">' + counts[t] + '</span></button>';
+    }).join('');
+    gsf.list = (gsf.tab === 'all') ? results : results.filter(function(r){ return r.cat === gsf.tab; });
+    var shown = gsf.list.slice(0, gsf.limit);
+    var html = shown.map(function(r, i){ return gsRowHtml(r, 'data-gsf="' + i + '"', tl); }).join('');
+    if (!tl) html = '<div class="gs-empty">검색어를 입력해 주세요.</div>';
+    else if (!html) html = '<div class="gs-empty">검색 결과가 없어요.</div>';
+    listEl.innerHTML = html;
+    if (gsf.list.length > shown.length){
+      listEl.insertAdjacentHTML('beforeend', '<button type="button" class="gsf-more-btn" id="gsf-more">더 보기 (' + shown.length + ' / ' + gsf.list.length + ')</button>');
+    }
+  }
+
   function goToItem(cat, it, term){
     state.activeTab = cat;
     state.search[cat] = term;
@@ -2600,6 +2725,43 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   gsInput.addEventListener('focus', function(){ if (gsInput.value.trim()) renderGlobalResults(); });
   gsInput.addEventListener('keydown', function(e){
     if (e.key === 'Escape'){ gsInput.value = ''; hideGlobalResults(); gsInput.blur(); }
+    else if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229 && gsInput.value.trim()){
+      e.preventDefault();
+      openFullResults(gsInput.value.trim());
+    }
+  });
+  // 전체 검색 결과 화면
+  document.getElementById('gsf-close').addEventListener('click', closeFullResults);
+  document.getElementById('gs-full-overlay').addEventListener('click', function(e){
+    if (e.target === this) closeFullResults();
+  });
+  document.getElementById('gsf-input').addEventListener('input', function(){
+    gsf.term = this.value; gsf.limit = GSF_PAGE;
+    renderFullResults();
+  });
+  document.getElementById('gsf-tabs').addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-tab]');
+    if (!b) return;
+    gsf.tab = b.getAttribute('data-tab'); gsf.limit = GSF_PAGE;
+    renderFullResults();
+  });
+  document.getElementById('gsf-list').addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('#gsf-more')){
+      gsf.limit += GSF_PAGE;
+      renderFullResults();
+      return;
+    }
+    var row = e.target.closest && e.target.closest('[data-gsf]');
+    if (!row) return;
+    var r = gsf.list[+row.getAttribute('data-gsf')];
+    if (!r) return;
+    var t = gsf.term.trim();
+    closeFullResults();
+    goToItem(r.cat, r.it, t);
+  });
+  document.addEventListener('keydown', function(e){
+    var ov = document.getElementById('gs-full-overlay');
+    if (e.key === 'Escape' && ov && !ov.classList.contains('hidden')) closeFullResults();
   });
   document.addEventListener('click', function(e){
     if (!(e.target.closest && e.target.closest('.global-search'))) hideGlobalResults();
