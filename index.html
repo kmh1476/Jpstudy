@@ -1302,7 +1302,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var PAGE_SIZE = 10;
   var state = { activeTab: 'review', reviewQueue: null, reviewIdx: 0, reviewFlipped: false, openDetail: {}, editMode: {}, theme: 'light',
     search: { vocab:'', kanji:'', grammar:'', expr:'' },
-    sortMode: { vocab:'due', kanji:'due', grammar:'topic', expr:'topic' },
+    sortMode: { vocab:'created', kanji:'created', grammar:'topic', expr:'topic' },
+    createdDir: { vocab:'desc', kanji:'desc', grammar:'desc', expr:'desc' },   // 등록순: desc=최근 것이 위
     kanaFilter: { vocab:null, kanji:null, grammar:null, expr:null },
     page: { vocab:1, kanji:1, grammar:1, expr:1 },
     streak: { count: 0, lastDate: null },
@@ -2572,11 +2573,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     wrap.innerHTML =
       (isTopicCat(cat) ? '<button data-sort="topic" class="'+(state.sortMode[cat]==='topic'?'active':'')+'">주제순</button>' : '') +
       '<button data-sort="due" class="'+(state.sortMode[cat]==='due'?'active':'')+'">복습순</button>' +
-      '<button data-sort="created" class="'+(state.sortMode[cat]==='created'?'active':'')+'">등록순</button>' +
+      '<button data-sort="created" class="'+(state.sortMode[cat]==='created'?'active':'')+'" title="한 번 더 누르면 오름/내림이 바뀌어요">등록순 ' + (state.createdDir[cat] === 'desc' ? '↓ 최근 먼저' : '↑ 오래된 먼저') + '</button>' +
       '<button data-sort="kana" class="'+(state.sortMode[cat]==='kana'?'active':'')+'">발음순 (あいうえお)</button>';
     wrap.querySelectorAll('[data-sort]').forEach(function(btn){
       btn.addEventListener('click', function(){
-        state.sortMode[cat] = btn.getAttribute('data-sort');
+        var mode = btn.getAttribute('data-sort');
+        if (mode === 'created' && state.sortMode[cat] === 'created') state.createdDir[cat] = state.createdDir[cat] === 'desc' ? 'asc' : 'desc';
+        state.sortMode[cat] = mode;
         state.page[cat] = 1;
         renderSortRow(cat);
         refreshListOnly(cat);
@@ -2680,10 +2683,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     } else if (state.sortMode[cat] === 'kana'){
       items.sort(function(a,b){ return readingKeyOf(cat,a).localeCompare(readingKeyOf(cat,b), 'ja'); });
     } else if (state.sortMode[cat] === 'created'){
+      var dirSign = state.createdDir[cat] === 'asc' ? 1 : -1;
       items.sort(function(a,b){
-        if (a.created !== b.created) return a.created < b.created ? -1 : 1;
-        if ((a.seq || 0) !== (b.seq || 0)) return (a.seq || 0) - (b.seq || 0);
-        return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+        var c = 0;
+        if (a.created !== b.created) c = a.created < b.created ? -1 : 1;
+        else if ((a.seq || 0) !== (b.seq || 0)) c = (a.seq || 0) - (b.seq || 0);
+        else c = a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
+        return c * dirSign;
       });
     } else {
       items.sort(function(a,b){ return a.next < b.next ? -1 : 1; });
