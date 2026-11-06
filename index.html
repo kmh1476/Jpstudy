@@ -3262,5 +3262,27 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   });
 })();
 </script>
+<script>
+/* 아이패드/아이폰 '스마트 문장 부호'(따옴표를 ’ ‘ 로 바꿈)·자동수정을 입력칸에서 끔 */
+(function(){
+  function fix(el){
+    if (!el || !el.tagName) return;
+    var t = el.tagName;
+    if (t !== 'INPUT' && t !== 'TEXTAREA') return;
+    if (t === 'INPUT' && /^(checkbox|radio|button|submit|file|range|color)$/i.test(el.type)) return;
+    el.setAttribute('autocorrect', 'off');
+    el.setAttribute('autocapitalize', 'off');
+    el.setAttribute('spellcheck', 'false');
+  }
+  function fixAll(root){ (root.querySelectorAll ? root.querySelectorAll('input,textarea') : []).forEach(fix); }
+  fixAll(document);
+  new MutationObserver(function(ms){
+    ms.forEach(function(m){
+      m.addedNodes.forEach(function(n){ if (n.nodeType === 1){ fix(n); fixAll(n); } });
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('focusin', function(e){ fix(e.target); });
+})();
+</script>
 </body>
 </html>
