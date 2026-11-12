@@ -156,6 +156,7 @@
   }
   .flashcard .back .row b.label-on { color: var(--jade); border-left-color: var(--jade); }
   .flashcard .back .row b.label-kun { color: var(--indigo); border-left-color: var(--indigo); }
+  .flashcard .back .row b.label-ex { color: var(--purple-acc); border-left-color: var(--purple-acc); }
   .flashcard .back .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 15px; margin-left: 8px; }
   .flashcard .back .row .row-value { display: block; white-space: pre-wrap; padding-left: 16px; margin-top: 6px; line-height: 2; }
   .flashcard .back .row .row-value-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-top: 6px; padding-left: 16px; }
@@ -238,6 +239,7 @@
   .kr-badge { font-size: 11px; font-weight: 700; padding: 0 6px; line-height: 18px; border-radius: 2px; color: #fff; flex-shrink: 0; }
   .kr-badge.kr-on { background: var(--jade); }
   .kr-badge.kr-kun { background: var(--indigo); }
+  .kr-badge.kr-ex { background: var(--purple-acc); }
   .kr-text { font-family: 'Noto Serif JP', serif; font-weight: 500; font-size: 15px; }
   .item-row .meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted); }
   .box-chip { color: var(--jade); font-weight: 700; font-size: 11px; border-bottom: 1px solid var(--jade); padding-bottom: 1px; }
@@ -253,6 +255,7 @@
   }
   .item-detail .row b.label-on { color: var(--jade); border-left-color: var(--jade); }
   .item-detail .row b.label-kun { color: var(--indigo); border-left-color: var(--indigo); }
+  .item-detail .row b.label-ex { color: var(--purple-acc); border-left-color: var(--purple-acc); }
   .item-detail .row .row-inline { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 14px; margin-left: 8px; }
   .item-detail .row .row-value { display: block; white-space: pre-wrap; padding-left: 16px; margin-top: 6px; line-height: 2; }
   .item-detail .row .row-value-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-top: 6px; padding-left: 16px; }
@@ -637,13 +640,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   // 입력한 순서와 상관없이 목록/복습에서는 항상 음독을 먼저, 훈독을 나중에 보여줌.
   function sortedReadingGroups(it){
     var groups = getReadingGroups(it).slice();
-    var rank = { on: 0, kun: 1 };
+    var rank = { on: 0, kun: 1, ex: 2 };
     groups.sort(function(a, b){ return (rank[a.type] || 0) - (rank[b.type] || 0); });
     return groups;
   }
   function rowLabelClass(label){
     if (label === '음독') return ' label-on';
     if (label === '훈독') return ' label-kun';
+    if (label === '예외') return ' label-ex';
     return '';
   }
   function formatKanjiWordItems(words){
@@ -2035,13 +2039,48 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<div class="settings-section"><h3>데이터 백업</h3>' + renderBackupRow() +
         '<div class="settings-help">내보내기로 받은 JSON 파일을 불러오기로 다시 가져올 수 있어요. (AI 키는 백업에 포함되지 않아요)</div></div>' +
       '<div class="settings-section"><h3>기타</h3><div class="direction-row" style="margin-top:0;">' +
+        '<button type="button" id="convert-ex-btn">한자: 읽기가 "예외"로 적힌 것 → 예외 종류로 변환</button>' +
         '<button type="button" id="reset-levels-btn">모든 항목 레벨 초기화</button>' +
         '<button type="button" id="logout-btn">로그아웃</button></div></div>';
     renderThemeRow();
     bindSettings(body);
   }
+  // 예전에 음독/훈독의 '기본 읽기' 칸에 "예외"라고 적어둔 것을 새 '예외' 종류로 일괄 변환
+  function convertExceptionGroups(){
+    function isEx(g){
+      if (!g || g.type === 'ex') return false;
+      return /^(예외|例外)$/.test(String(g.reading || '').replace(/[\s()（）\[\]「」・、,.:;]/g, ''));
+    }
+    var hits = [];
+    data.kanji.forEach(function(it){
+      var groups = getReadingGroups(it);
+      if (groups.some(isEx)) hits.push(it);
+    });
+    if (!hits.length){
+      alert('기본 읽기 칸에 "예외"라고 적힌 한자를 못 찾았어요.\n(단어 칸이나 비고에 적어두셨다면 알려주세요. 거기에 맞춰 바꿔드릴게요.)');
+      return;
+    }
+    var names = hits.slice(0, 15).map(function(it){ return it.kanji; }).join(' ');
+    if (!confirm('기본 읽기가 "예외"로 적힌 한자 ' + hits.length + '개를 찾았어요.\n' + names + (hits.length > 15 ? ' …' : '') +
+      '\n\n이 읽기들을 "예외" 종류로 바꿀까요? (단어와 읽기는 그대로 유지돼요)')) return;
+    hits.forEach(function(it){
+      var groups = getReadingGroups(it), out = [], exGroup = null;
+      groups.forEach(function(g){
+        if (isEx(g) || g.type === 'ex'){
+          if (!exGroup){ exGroup = { type:'ex', reading:'', words: (g.words || []).slice() }; out.push(exGroup); }
+          else exGroup.words = exGroup.words.concat(g.words || []);
+        } else out.push(g);
+      });
+      it.readings = out;
+    });
+    pushCategory('kanji');
+    renderAll();
+    alert(hits.length + '개 한자를 "예외" 종류로 바꿨어요.');
+  }
   function bindSettings(root){
     function $(id){ return root.querySelector('#' + id); }
+    var convBtn = $('convert-ex-btn');
+    if (convBtn) convBtn.addEventListener('click', convertExceptionGroups);
     var resetBtn = $('reset-levels-btn');
     if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
     var logoutBtn = $('logout-btn');
@@ -2133,8 +2172,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
           '<select data-gi="'+gi+'" data-f="type" class="rg-input rg-type">' +
             '<option value="on"'+(g.type==='on'?' selected':'')+'>음독</option>' +
             '<option value="kun"'+(g.type==='kun'?' selected':'')+'>훈독</option>' +
+            '<option value="ex"'+(g.type==='ex'?' selected':'')+'>예외</option>' +
           '</select>' +
-          '<textarea placeholder="기본 읽기 (예: さん / みっ~)" data-gi="'+gi+'" data-f="reading" class="rg-input">'+esc(g.reading)+'</textarea>' +
+          (g.type === 'ex'
+            ? '<textarea placeholder="예외는 대표 읽기 없음 (단어마다 읽기를 적어요)" data-gi="'+gi+'" data-f="reading" class="rg-input" disabled></textarea>'
+            : '<textarea placeholder="기본 읽기 (예: さん / みっ~)" data-gi="'+gi+'" data-f="reading" class="rg-input">'+esc(g.reading)+'</textarea>') +
           '<button type="button" class="icon-x" data-del-group="'+gi+'" title="이 읽기 전체 삭제">×</button>' +
         '</div>' +
         '<div class="reading-group-words">'+wordsHtml+'</div>' +
@@ -2152,6 +2194,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     wrap.querySelectorAll('select.rg-type').forEach(function(sel){
       sel.addEventListener('change', function(){
         groupsArr[+sel.getAttribute('data-gi')].type = sel.value;
+        if (sel.value === 'ex') groupsArr[+sel.getAttribute('data-gi')].reading = '';
+        renderReadingGroupsEditor(containerId, groupsArr);   // 예외면 대표 읽기 칸을 잠금
       });
     });
     wrap.querySelectorAll('[data-del-word]').forEach(function(btn){
@@ -2543,8 +2587,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         var fields = readFormFields(cat, prefix);
         if (!fields[TITLE_KEY[cat]]) return;
         if (isKanji) fields.readings = readingGroups
-          .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
-          .filter(function(g){ return g.reading || g.words.length; });
+          .map(function(g){ return { type:g.type, reading:(g.type === 'ex' ? '' : (g.reading||'').trim()), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
+          .filter(function(g){ return g.type === 'ex' || g.reading || g.words.length; });
         if (cat === 'grammar'){
           var ms = 0;
           data.grammar.forEach(function(g){ if ((g.topic || '') === (fields.topic || '') && (g.seq || 0) > ms) ms = g.seq; });
@@ -2712,6 +2756,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var parts = [];
       if (onList.length) parts.push('음: ' + onList.join('・'));
       if (kunList.length) parts.push('훈: ' + kunList.join('・'));
+      if (groups.some(function(g){ return g.type === 'ex'; })) parts.push('예외');
       return parts.join('  ');
     }
     // 문법의 접속 형태는 목록에 나오지 않고, 항목을 눌러 펼쳤을 때만 보임
@@ -2728,6 +2773,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       return '<div class="kr-line"><span class="kr-badge kr-'+type+'">'+label+'</span><span class="kr-text">'+esc(list.join('・'))+'</span></div>';
     }
     var html = line('on', '음독') + line('kun', '훈독');
+    // 예외는 단어마다 읽기가 달라서 대표 읽기가 없음 → 목록에는 '예외 있음' 표시만
+    if (groups.some(function(g){ return g.type === 'ex'; })) html += '<div class="kr-line"><span class="kr-badge kr-ex">예외</span></div>';
     return html ? '<div class="kanji-reads">'+html+'</div>' : '';
   }
 
@@ -2810,7 +2857,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         var items = formatKanjiWordItems(g.words);
         var speaks = g.words.filter(function(w){ return (w.word || '') || (w.reading || '') || (w.meaning || ''); })
           .map(function(w){ return w.reading || w.word || ''; });
-        return [(g.type === 'on' ? '음독' : '훈독'), items.join('\n'), g.reading || '', items, speaks];
+        return [(g.type === 'on' ? '음독' : (g.type === 'ex' ? '예외' : '훈독')), items.join('\n'), g.reading || '', items, speaks];
       });
   }
   // Only fields NOT already visible in the collapsed row (title, sub-field, meaning,
@@ -2882,8 +2929,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         var fields = readFormFields(cat, prefix);
         if (isExpr) fields.unknownWords = unknownRows.filter(function(w){ return w.word && w.word.trim(); }).map(function(w){ if (!w.id) w.id = uid(); return w; });
         if (isKanji) fields.readings = readingGroups
-          .map(function(g){ return { type:g.type, reading:(g.reading||'').trim(), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
-          .filter(function(g){ return g.reading || g.words.length; });
+          .map(function(g){ return { type:g.type, reading:(g.type === 'ex' ? '' : (g.reading||'').trim()), words: g.words.filter(function(w){ return w.word && w.word.trim(); }) }; })
+          .filter(function(g){ return g.type === 'ex' || g.reading || g.words.length; });
         updateItem(cat, it.id, fields);
         state.editMode[it.id] = false;
       });
