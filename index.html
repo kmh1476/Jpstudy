@@ -2039,48 +2039,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<div class="settings-section"><h3>데이터 백업</h3>' + renderBackupRow() +
         '<div class="settings-help">내보내기로 받은 JSON 파일을 불러오기로 다시 가져올 수 있어요. (AI 키는 백업에 포함되지 않아요)</div></div>' +
       '<div class="settings-section"><h3>기타</h3><div class="direction-row" style="margin-top:0;">' +
-        '<button type="button" id="convert-ex-btn">한자: 읽기가 "예외"로 적힌 것 → 예외 종류로 변환</button>' +
         '<button type="button" id="reset-levels-btn">모든 항목 레벨 초기화</button>' +
         '<button type="button" id="logout-btn">로그아웃</button></div></div>';
     renderThemeRow();
     bindSettings(body);
   }
-  // 예전에 음독/훈독의 '기본 읽기' 칸에 "예외"라고 적어둔 것을 새 '예외' 종류로 일괄 변환
-  function convertExceptionGroups(){
-    function isEx(g){
-      if (!g || g.type === 'ex') return false;
-      return /^(예외|例外)$/.test(String(g.reading || '').replace(/[\s()（）\[\]「」・、,.:;]/g, ''));
-    }
-    var hits = [];
-    data.kanji.forEach(function(it){
-      var groups = getReadingGroups(it);
-      if (groups.some(isEx)) hits.push(it);
-    });
-    if (!hits.length){
-      alert('기본 읽기 칸에 "예외"라고 적힌 한자를 못 찾았어요.\n(단어 칸이나 비고에 적어두셨다면 알려주세요. 거기에 맞춰 바꿔드릴게요.)');
-      return;
-    }
-    var names = hits.slice(0, 15).map(function(it){ return it.kanji; }).join(' ');
-    if (!confirm('기본 읽기가 "예외"로 적힌 한자 ' + hits.length + '개를 찾았어요.\n' + names + (hits.length > 15 ? ' …' : '') +
-      '\n\n이 읽기들을 "예외" 종류로 바꿀까요? (단어와 읽기는 그대로 유지돼요)')) return;
-    hits.forEach(function(it){
-      var groups = getReadingGroups(it), out = [], exGroup = null;
-      groups.forEach(function(g){
-        if (isEx(g) || g.type === 'ex'){
-          if (!exGroup){ exGroup = { type:'ex', reading:'', words: (g.words || []).slice() }; out.push(exGroup); }
-          else exGroup.words = exGroup.words.concat(g.words || []);
-        } else out.push(g);
-      });
-      it.readings = out;
-    });
-    pushCategory('kanji');
-    renderAll();
-    alert(hits.length + '개 한자를 "예외" 종류로 바꿨어요.');
-  }
   function bindSettings(root){
     function $(id){ return root.querySelector('#' + id); }
-    var convBtn = $('convert-ex-btn');
-    if (convBtn) convBtn.addEventListener('click', convertExceptionGroups);
     var resetBtn = $('reset-levels-btn');
     if (resetBtn) resetBtn.addEventListener('click', resetAllLevels);
     var logoutBtn = $('logout-btn');
