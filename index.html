@@ -280,6 +280,11 @@
   .rg-seg .seg-btn.active[data-type="kun"] { background: var(--indigo); color: #fff; }
   .rg-seg .seg-btn.active[data-type="ex"] { background: var(--purple-acc); color: #fff; }
   .rg-seg .seg-btn:focus { outline: 2px solid var(--ink); outline-offset: -2px; }
+  /* 키보드(Tab)로 버튼에 포커스가 가면 눈에 확 띄게 */
+  form.entry button:focus { outline: 3px solid var(--hanko); outline-offset: 2px; background: var(--hanko-dim); color: var(--ink); }
+  form.entry button.primary:focus, form.entry button[type="submit"]:focus { background: var(--hanko); color: #fff; }
+  form.entry .rg-seg .seg-btn:focus { outline: 3px solid var(--hanko); outline-offset: -3px; }
+  form.entry .rg-seg .seg-btn.active:focus { background: var(--hanko); color: #fff; }
   .word-mini-row select { flex: 0 0 72px; padding: 7px 4px; font-size: 13px; border: 1px solid var(--line-strong); border-radius: 2px; background: var(--paper); color: var(--ink); }
 
   .empty-note { color: var(--muted); font-size: 13.5px; padding: 20px 0; text-align: center; }
@@ -2106,7 +2111,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         '<input placeholder="단어" data-i="'+i+'" data-f="word" class="uw-input" value="'+esc(rowsArr[i].word)+'">' +
         '<input placeholder="발음" data-i="'+i+'" data-f="reading" class="uw-input" value="'+esc(rowsArr[i].reading)+'">' +
         '<input placeholder="뜻" data-i="'+i+'" data-f="meaning" class="uw-input" value="'+esc(rowsArr[i].meaning)+'">' +
-        '<button type="button" class="icon-x" data-remove="'+i+'">×</button>' +
+        '<button type="button" class="icon-x" tabindex="-1" data-remove="'+i+'">×</button>' +
         '</div>';
     }).join('');
     wrap.querySelectorAll('.uw-input').forEach(function(inp){
@@ -2136,7 +2141,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
           '<textarea placeholder="단어" data-gi="'+gi+'" data-wi="'+wi+'" data-f="word" class="rg-input">'+esc(w.word)+'</textarea>' +
           '<textarea placeholder="읽기" data-gi="'+gi+'" data-wi="'+wi+'" data-f="reading" class="rg-input">'+esc(w.reading)+'</textarea>' +
           '<textarea placeholder="뜻" data-gi="'+gi+'" data-wi="'+wi+'" data-f="meaning" class="rg-input">'+esc(w.meaning)+'</textarea>' +
-          '<button type="button" class="icon-x" data-del-word="'+gi+':'+wi+'">×</button>' +
+          '<button type="button" class="icon-x" tabindex="-1" data-del-word="'+gi+':'+wi+'">×</button>' +
           '</div>';
       }).join('');
       return '<div class="reading-group">' +
@@ -2148,7 +2153,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
             }).join('') +
           '</div>' +
           '<textarea placeholder="'+(g.type === 'ex' ? '예외는 대표 읽기 없음 (단어마다 읽기를 적어요)' : '기본 읽기 (예: さん / みっ~)')+'" data-gi="'+gi+'" data-f="reading" class="rg-input"'+(g.type === 'ex' ? ' disabled' : '')+'>'+(g.type === 'ex' ? '' : esc(g.reading))+'</textarea>' +
-          '<button type="button" class="icon-x" data-del-group="'+gi+'" title="이 읽기 전체 삭제">×</button>' +
+          '<button type="button" class="icon-x" tabindex="-1" data-del-group="'+gi+'" title="이 읽기 전체 삭제">×</button>' +
         '</div>' +
         '<div class="reading-group-words">'+wordsHtml+'</div>' +
         '<button type="button" class="ghost" data-add-word="'+gi+'">+ 이 읽기에 단어 추가</button>' +
@@ -3353,7 +3358,7 @@ document.addEventListener('keydown', function(e){
   if (!form) return;
   var all = form.querySelectorAll('input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [tabindex]');
   var list = Array.prototype.filter.call(all, function(el){
-    return el.tabIndex >= 0 && (el.offsetParent !== null || el === t);
+    return el.tabIndex >= 0 && !el.classList.contains('icon-x') && (el.offsetParent !== null || el === t);
   });
   var i = list.indexOf(t);
   if (i === -1) return;
