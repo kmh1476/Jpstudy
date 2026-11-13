@@ -445,6 +445,45 @@
   .tip-h { background: rgba(255, 224, 51, 0.7); border-radius: 2px; padding: 0 3px; }
   :root[data-theme="dark"] .tip-h { background: rgba(255, 214, 0, 0.35); }
   .tip-b { font-weight: 700; }
+  /* 팁 내용 구조 */
+  .tip-sub { font-weight: 700; font-size: 15.5px; margin: 14px 0 6px; padding-left: 10px; border-left: 4px solid var(--indigo); }
+  .tip-g { color: var(--muted); font-weight: 400; }
+  .tip-ol { list-style: none; margin: 0; padding: 0; counter-reset: tipn; }
+  .tip-ol > li { counter-increment: tipn; position: relative; padding: 7px 0 7px 34px; }
+  .tip-ol > li + li { border-top: 1px dashed var(--line); }
+  .tip-ol > li::before { content: counter(tipn); position: absolute; left: 0; top: 9px; width: 22px; height: 22px; border-radius: 50%; background: var(--indigo); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .tip-ol.red > li::before { background: var(--hanko); }
+  .tip-note { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .tip-ul { list-style: none; margin: 4px 0 0; padding: 0; }
+  .tip-ul li { position: relative; padding-left: 16px; margin: 2px 0; }
+  .tip-ul li::before { content: '▸'; position: absolute; left: 0; color: var(--indigo); }
+  .tip-sum { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; padding: 8px 12px; background: rgba(255, 224, 51, 0.28); border-left: 4px solid #E0B800; border-radius: 3px; font-weight: 700; }
+  .tip-sum-tag { flex-shrink: 0; font-size: 11px; background: #E0B800; color: #2b2400; padding: 0 7px; border-radius: 2px; line-height: 20px; }
+  .tip-ex { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 24px; margin: 8px 0 2px; padding: 8px 12px; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 4px; }
+  .tip-tag { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #fff; background: var(--jade); padding: 0 8px; border-radius: 2px; line-height: 20px; }
+  .tip-pair { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; font-size: 15px; }
+  .tip-pair .arr, .tip-m i { font-style: normal; color: var(--muted); margin: 0 6px; }
+  .tip-card { border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); padding: 12px 14px 14px; margin: 14px 0; }
+  .tip-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 500; font-size: 15px; }
+  .tip-law { flex-shrink: 0; background: var(--indigo); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 10px; border-radius: 3px; }
+  .tip-warn { margin-top: 12px; border: 1.5px solid var(--hanko); border-radius: 5px; background: var(--paper-card); padding: 10px 14px 10px; }
+  .tip-warn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .tip-warn-head .tip-w { margin-right: 0; }
+  .tip-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 3px 16px; margin-top: 6px; }
+  .tip-m { display: flex; align-items: baseline; font-size: 14px; }
+  .tip-m b { min-width: 1.5em; }
+  .tip-m .jp { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; }
+  .tip-etc { color: var(--muted); font-size: 13px; align-self: end; }
+  .tip-group { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
+  .tip-group .tip-map { flex: 1; margin-top: 0; }
+  .tip-gl { flex-shrink: 0; min-width: 28px; text-align: center; font-weight: 700; color: #fff; background: var(--hanko); border-radius: 3px; padding: 0 7px; line-height: 24px; }
+  .tip-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tip-chip { display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 10px; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 4px; font-size: 13px; }
+  .tip-chip .kb { font-family: 'Noto Serif JP', serif; font-weight: 700; font-size: 18px; color: var(--ink); }
+  .tip-chip i { font-style: normal; color: var(--muted); }
+  .tip-chip b { font-family: 'Noto Serif JP', serif; }
+  @media (max-width: 560px) { .tip-map { grid-template-columns: 1fr; } }
+
   .filter-box { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper2); }
   .filter-box .topic-select { max-width: none; }
 
@@ -3286,48 +3325,82 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   });
   // ---------- 한일 한자음 대응관계 24법칙 (팁) ----------
   // 서식: {r|빨간색} {h|형광펜 노란색} {b|굵게}.  [들여쓰기단계, 글, 추가클래스]
-  var KANJI_TIP = [
-    [0, '1. 꼭 알아야 하는 한자 음독의 기본 틀'],
-    [1, '1) 일본 한자음 (음독)의 절대 법칙'],
-    [2, '(1) 한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다. (한자 → ○ or ○○)'],
-    [2, '(2) 머리에는 ん, ぱ행은 올 수 없다.'],
-    [2, '(3) 일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.'],
-    [3, '가) 자음이 있을 경우에는 k・t만 올 수 있다.'],
-    [3, '나) 모음은 u・i만 올 수 있다.'],
-    [3, '다) 그리고 ん이 올 수 있다.'],
-    [3, "▶ 즉, '○+う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다.", 'tip-b'],
-    [2, '(4) 한국어 발음은 일본어의 \'음독\'과 어느 정도 법칙적으로 대응한다.'],
-    [3, '예) 山: 산 ▶ ㅅ + ㅏ + ㄴ → s + a + N ▶ さん', 'ex'],
-    [2, '(5) 종성>초성>중성 순으로 법칙을 따를 확률이 높다.'],
-
-    [0, '2. 초성의 기본 대응 7법칙'],
-    [1, '기본 초성 대응 ① 초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.', 'rule'],
-    [2, '예) 운영(運営): {b|う}ん{b|え}い | 영원(永遠): {b|え}い{b|え}ん', 'ex'],
-    [2, '{w|주의} 단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.'],
-    [3, '어 ▷ ご(語・御)/ぎょ(魚) | 의 ▷ ぎ(義・儀・議・疑) | 월 ▷ げつ(月) 등'],
-    [3, '양 ▷ じょう(嬢・醸・譲・壤) | 인 ▷ にん(忍・認) | 완 ▷ (完・緩) 등'],
-
-    [1, '기본 초성 대응 ② 초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.', 'rule'],
-    [2, '예) 결혼(結婚): {b|け}っ{b|こ}ん | 한국(韓国): {b|か}ん{b|こ}く', 'ex'],
-    [2, '{w|주의}'],
-    [3, '가) ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음'],
-    [4, '{b|ㄱ} ▶ {b|구} ▷ ぐ(具) | {b|군} ▷ ぐん(軍・郡・群) | {b|개} ▷ がい(概・慨) 등'],
-    [4, '{b|ㅎ} ▶ {b|해} ▷ がい(害・該・骸) | {b|현} ▷ げん(現・玄) | {b|환} ▷ げん(幻) | {b|후} ▷ ご(後) | {b|호} ▷ ごう(号・豪) 등'],
-    [3, '나) ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.'],
-    [4, '和(화)[わ], 賄(회)[わい], 惑(혹)[わく], 恵(혜)[え], 会(회)[かい・え], 横(횡)[おう], 黄(황)[おう]', 'ex'],
-    [3, '다) ㅋ는 快(쾌)[かい] 한 글자뿐이니 어휘적으로 외워두기.']
-  ];
+  // 한일 한자음 대응 팁: 구조(제목/번호 칩/예 박스/주의 박스/대응표)를 코드로 조립
+  // 서식 토큰: {r|빨강} {h|형광펜} {b|굵게} {g|회색}
   function tipMarkup(s){
-    return esc(s).replace(/\{([rhbw])\|([^}]*)\}/g, function(_, k, t){
+    return esc(s).replace(/\{([rhbg])\|([^}]*)\}/g, function(_, k, t){
       return '<span class="tip-' + k + '">' + t + '</span>';
     });
   }
+  function tipBuild(){
+    var X = tipMarkup;
+    function sec(n, title){ return '<div class="tip-line l0"><span class="tip-num">' + n + '</span><span>' + X(title) + '</span></div>'; }
+    function sub(title){ return '<div class="tip-sub">' + X(title) + '</div>'; }
+    function ol(items, red){ return '<ol class="tip-ol' + (red ? ' red' : '') + '">' + items.map(function(i){ return '<li>' + i + '</li>'; }).join('') + '</ol>'; }
+    function ul(items){ return '<ul class="tip-ul">' + items.map(function(i){ return '<li>' + X(i) + '</li>'; }).join('') + '</ul>'; }
+    function sum(text){ return '<div class="tip-sum"><span class="tip-sum-tag">즉</span><span>' + X(text) + '</span></div>'; }
+    function pair(k, v){ return '<span class="tip-pair"><span class="kr">' + X(k) + '</span><i class="arr">→</i><span class="jp">' + X(v) + '</span></span>'; }
+    function ex(inner){ return '<div class="tip-ex"><span class="tip-tag">예</span>' + inner + '</div>'; }
+    function map(rows, etc){
+      return '<div class="tip-map">' + rows.map(function(r){
+        return '<div class="tip-m"><b>' + X(r[0]) + '</b><i>→</i><span class="jp">' + X(r[1]) + '</span></div>';
+      }).join('') + (etc ? '<div class="tip-etc">등</div>' : '') + '</div>';
+    }
+    function group(label, mapHtml){ return '<div class="tip-group"><span class="tip-gl">' + X(label) + '</span>' + mapHtml + '</div>'; }
+    function chips(rows){
+      return '<div class="tip-chips">' + rows.map(function(r){
+        return '<span class="tip-chip"><span class="kb">' + r[0] + '</span><span class="tip-g">' + r[1] + '</span><i>→</i><b>' + r[2] + '</b></span>';
+      }).join('') + '</div>';
+    }
+    function card(law, head, inner){
+      return '<div class="tip-card"><div class="tip-card-head"><span class="tip-law">' + law + '</span><span>' + X(head) + '</span></div>' + inner + '</div>';
+    }
+    function warn(head, body){
+      return '<div class="tip-warn"><div class="tip-warn-head"><span class="tip-w">주의</span>' + (head ? '<span>' + X(head) + '</span>' : '') + '</div>' + (body || '') + '</div>';
+    }
+
+    var h = '';
+    // ===== 1. 기본 틀 =====
+    h += sec(1, '꼭 알아야 하는 한자 음독의 기본 틀');
+    h += sub('일본 한자음 (음독)의 절대 법칙');
+    h += ol([
+      X('한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다.') + ' <span class="tip-note">한자 → ○ or ○○</span>',
+      X('머리에는 {b|ん}, {b|ぱ행}은 올 수 없다.'),
+      X('일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.') +
+        ul(['자음이 있을 경우에는 k・t만 올 수 있다.', '모음은 u・i만 올 수 있다.', '그리고 ん이 올 수 있다.']) +
+        sum("'○ + う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다."),
+      X("한국어 발음은 일본어의 '음독'과 어느 정도 법칙적으로 대응한다.") +
+        ex('<span class="tip-pair"><span class="kr">山 : 산</span><i class="arr">→</i><span class="jp">ㅅ + ㅏ + ㄴ</span><i class="arr">→</i><span class="jp">s + a + N</span><i class="arr">→</i><span class="jp"><b>さん</b></span></span>'),
+      X('{b|종성} > {b|초성} > {b|중성} 순으로 법칙을 따를 확률이 높다.')
+    ]);
+
+    // ===== 2. 초성 대응 =====
+    h += sec(2, '초성의 기본 대응 7법칙');
+    h += card('초성 대응 ①', '초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.',
+      ex(pair('운영(運営)', '{b|う}ん{b|え}い') + pair('영원(永遠)', '{b|え}い{b|え}ん')) +
+      warn('단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.',
+        map([
+          ['어', '{b|ご}{g|(語・御)} / {b|ぎょ}{g|(魚)}'],
+          ['의', '{b|ぎ}{g|(義・儀・議・疑)}'],
+          ['월', '{b|げつ}{g|(月)}'],
+          ['양', '{b|じょう}{g|(嬢・醸・譲・壤)}'],
+          ['인', '{b|にん}{g|(忍・認)}'],
+          ['완', '{g|(完・緩)}']
+        ], true)));
+    h += card('초성 대응 ②', '초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.',
+      ex(pair('결혼(結婚)', '{b|け}っ{b|こ}ん') + pair('한국(韓国)', '{b|か}ん{b|こ}く')) +
+      warn('', ol([
+        X('ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음') +
+          group('ㄱ', map([['구', '{b|ぐ}{g|(具)}'], ['군', '{b|ぐん}{g|(軍・郡・群)}'], ['개', '{b|がい}{g|(概・慨)}']], true)) +
+          group('ㅎ', map([['해', '{b|がい}{g|(害・該・骸)}'], ['현', '{b|げん}{g|(現・玄)}'], ['환', '{b|げん}{g|(幻)}'], ['후', '{b|ご}{g|(後)}'], ['호', '{b|ごう}{g|(号・豪)}']], true)),
+        X('ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.') +
+          chips([['和', '화', 'わ'], ['賄', '회', 'わい'], ['惑', '혹', 'わく'], ['恵', '혜', 'え'], ['会', '회', 'かい・え'], ['横', '횡', 'おう'], ['黄', '황', 'おう']]),
+        X('ㅋ는 {b|快(쾌)[かい]} 한 글자뿐이니 어휘적으로 외워두기.')
+      ], true)));
+    return h;
+  }
   function openTip(){
-    document.getElementById('tip-body').innerHTML = KANJI_TIP.map(function(r){
-      var html = tipMarkup(r[1]);
-      if (r[0] === 0) html = html.replace(/^(\d+)\.\s*(.*)$/, '<span class="tip-num">$1</span><span>$2</span>');
-      return '<div class="tip-line l' + r[0] + (r[2] ? ' ' + r[2] : '') + '">' + html + '</div>';
-    }).join('');
+    document.getElementById('tip-body').innerHTML = tipBuild();
     document.getElementById('tip-overlay').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
     document.getElementById('tip-overlay').scrollTop = 0;
