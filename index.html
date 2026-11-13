@@ -485,14 +485,11 @@
   .tip-chip i { font-style: normal; color: var(--muted); }
   .tip-chip b { font-family: 'Noto Serif JP', serif; }
   @media (max-width: 560px) { .tip-map { grid-template-columns: 1fr; } }
-  /* 일본어·한자: 한글과 같은 글꼴, 아주 조금만 크게 */
+  /* 한글·일본어·한자 모두 같은 크기 (15px) */
   .tip-body { font-size: 15px; }
-  .tip-jp { font-family: inherit; font-size: 1.08em; }
-  .tip-pair, .tip-m .jp, .tip-chip .kb, .tip-chip b { font-family: inherit !important; }
-  .tip-chip .kb { font-size: 20px !important; }
-  .tip-chip b { font-size: 15px !important; }
-  .tip-pair { font-size: 15.5px !important; }
-  .tip-m { font-size: 15px !important; }
+  .tip-jp { font-family: 'Noto Sans KR', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif; font-size: 1em; }
+  .tip-pair, .tip-m, .tip-chip, .tip-chip .kb, .tip-chip b, .tip-chip .tip-g, .tip-m .jp { font-family: inherit !important; font-size: 15px !important; }
+  .tip-chip .kb, .tip-chip b { font-family: 'Noto Sans KR', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif !important; }
   .tip-ed-block input[type="text"], .tip-ed-block textarea { font-family: inherit !important; font-size: 15px !important; }
 
   /* 팁 편집 화면 */
