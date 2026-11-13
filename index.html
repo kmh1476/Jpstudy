@@ -483,6 +483,33 @@
   .tip-chip i { font-style: normal; color: var(--muted); }
   .tip-chip b { font-family: 'Noto Serif JP', serif; }
   @media (max-width: 560px) { .tip-map { grid-template-columns: 1fr; } }
+  /* 팁 편집 화면 */
+  .tip-head-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  #tip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  #tip-actions button { min-height: 34px; padding: 0 14px; font-size: 13px; }
+  .tip-mini { min-height: 28px; padding: 0 10px; font-size: 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--paper-card); color: var(--ink); cursor: pointer; font-family: inherit; }
+  .tip-mini:disabled { opacity: 0.35; cursor: not-allowed; }
+  select.tip-mini { padding: 0 6px; }
+  .tip-fmt-r { color: var(--hanko); font-weight: 700; }
+  .tip-fmt-h { background: rgba(255, 224, 51, 0.7); }
+  .tip-fmt-b { font-weight: 700; }
+  .tip-fmt-g { color: var(--muted); }
+  .tip-ed-bar { position: sticky; top: -24px; z-index: 3; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 0; background: var(--paper-card); border-bottom: 1px solid var(--line); }
+  .tip-ed-hint { font-size: 12px; color: var(--muted); }
+  .tip-ed-hint2 { font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  .tip-ed-block { border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); padding: 10px 12px 12px; margin: 10px 0; }
+  .tip-ed-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .tip-ed-spacer { flex: 1; }
+  .tip-ed-type { font-size: 12px; font-weight: 700; color: #fff; background: var(--indigo); padding: 0 9px; border-radius: 3px; line-height: 22px; }
+  .tip-ed-type.red { background: var(--hanko); }
+  .tip-ed-block label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  .tip-ed-block label.tip-ck { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--ink); font-size: 13px; cursor: pointer; }
+  .tip-ed-block input[type="text"], .tip-ed-block textarea { width: 100%; padding: 7px 9px; font-size: 14px; font-family: inherit; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--paper-card); color: var(--ink); resize: vertical; line-height: 1.5; }
+  .tip-ed-sub { margin-top: 10px; padding: 8px 10px 10px; border: 1.5px solid var(--hanko); border-radius: 5px; }
+  .tip-ed-subtitle { font-size: 12px; font-weight: 700; color: var(--hanko); }
+  .tip-ed-item { margin-top: 10px; padding: 8px 10px 10px; border: 1px dashed var(--hanko); border-radius: 4px; background: var(--paper-card); }
+  .tip-ed-adds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: var(--muted); }
+
 
   .filter-box { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper2); }
   .filter-box .topic-select { max-width: none; }
@@ -566,7 +593,7 @@
   <div class="tip-box" role="dialog" aria-label="한일 한자음 대응관계 24법칙">
     <div class="tip-head">
       <h2 class="serif">💡 한일 한자음 대응관계 24법칙</h2>
-      <button type="button" class="secondary" id="tip-close">닫기</button>
+      <div class="tip-head-right"><span id="tip-actions"></span><button type="button" class="secondary" id="tip-close">닫기</button></div>
     </div>
     <div class="tip-body" id="tip-body"></div>
   </div>
@@ -860,6 +887,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         renderTabs();
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
       }
+      if (Array.isArray(d.tipBlocks)){
+        state.tipBlocks = d.tipBlocks;
+        var tov = document.getElementById('tip-overlay');
+        if (!state.tipEdit && tov && !tov.classList.contains('hidden')) renderTip();
+      }
       if (d.dailyCap !== undefined && d.dailyCap !== state.dailyCap){
         state.dailyCap = d.dailyCap;
         if (state.activeTab === 'review' && !state.reviewQueue) renderReview();
@@ -876,6 +908,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     fsUid = null;
     data = emptyData();
     state.aiKey = '';
+    state.tipBlocks = null;
     state.streak = { count: 0, lastDate: null };
     renderStreakBadge();
   }
@@ -3325,90 +3358,273 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   });
   // ---------- 한일 한자음 대응관계 24법칙 (팁) ----------
   // 서식: {r|빨간색} {h|형광펜 노란색} {b|굵게}.  [들여쓰기단계, 글, 추가클래스]
-  // 한일 한자음 대응 팁: 구조(제목/번호 칩/예 박스/주의 박스/대응표)를 코드로 조립
-  // 서식 토큰: {r|빨강} {h|형광펜} {b|굵게} {g|회색}
+  // ---------- 한일 한자음 대응 팁 (편집 가능) ----------
+  // 내용은 '블록' 목록으로 저장돼요 (계정에 저장 → 다른 기기에서도 그대로).
+  // 서식 토큰: {r|빨강} {h|형광펜} {b|굵게} {g|회색}   /  연결 화살표: → (또는 ->)
+  var TIP_DEFAULT = [
+    { t:'sec', text:'꼭 알아야 하는 한자 음독의 기본 틀' },
+    { t:'sub', text:'일본 한자음 (음독)의 절대 법칙' },
+    { t:'item', text:'한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다. {g|한자 → ○ or ○○}', subs:'', sum:'', ex:'' },
+    { t:'item', text:'머리에는 {b|ん}, {b|ぱ행}은 올 수 없다.', subs:'', sum:'', ex:'' },
+    { t:'item', text:'일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.', subs:'자음이 있을 경우에는 k・t만 올 수 있다.\n모음은 u・i만 올 수 있다.\n그리고 ん이 올 수 있다.', sum:"'○ + う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다.", ex:'' },
+    { t:'item', text:"한국어 발음은 일본어의 '음독'과 어느 정도 법칙적으로 대응한다.", subs:'', sum:'', ex:'山 : 산 → ㅅ + ㅏ + ㄴ → s + a + N → {b|さん}' },
+    { t:'item', text:'{b|종성} > {b|초성} > {b|중성} 순으로 법칙을 따를 확률이 높다.', subs:'', sum:'', ex:'' },
+    { t:'sec', text:'초성의 기본 대응 7법칙' },
+    { t:'card', law:'초성 대응 ①', head:'초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.',
+      ex:'운영(運営) → {b|う}ん{b|え}い\n영원(永遠) → {b|え}い{b|え}ん',
+      warn:{ on:true, head:'단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.',
+        map:'어 → {b|ご}{g|(語・御)} / {b|ぎょ}{g|(魚)}\n의 → {b|ぎ}{g|(義・儀・議・疑)}\n월 → {b|げつ}{g|(月)}\n양 → {b|じょう}{g|(嬢・醸・譲・壤)}\n인 → {b|にん}{g|(忍・認)}\n완 → {g|(完・緩)}\n등', items:[] } },
+    { t:'card', law:'초성 대응 ②', head:'초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.',
+      ex:'결혼(結婚) → {b|け}っ{b|こ}ん\n한국(韓国) → {b|か}ん{b|こ}く',
+      warn:{ on:true, head:'', map:'', items:[
+        { text:'ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음',
+          map:'# ㄱ\n구 → {b|ぐ}{g|(具)}\n군 → {b|ぐん}{g|(軍・郡・群)}\n개 → {b|がい}{g|(概・慨)}\n등\n# ㅎ\n해 → {b|がい}{g|(害・該・骸)}\n현 → {b|げん}{g|(現・玄)}\n환 → {b|げん}{g|(幻)}\n후 → {b|ご}{g|(後)}\n호 → {b|ごう}{g|(号・豪)}\n등', chips:'' },
+        { text:'ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.', map:'',
+          chips:'和 | 화 | わ\n賄 | 회 | わい\n惑 | 혹 | わく\n恵 | 혜 | え\n会 | 회 | かい・え\n横 | 횡 | おう\n黄 | 황 | おう' },
+        { text:'ㅋ는 {b|快(쾌)[かい]} 한 글자뿐이니 어휘적으로 외워두기.', map:'', chips:'' }
+      ] } },
+    { t:'card', law:'초성 대응 ③', head:'초성 {r|ㅅ ㅈ ㅊ}은 기본적으로 {h|さ행}이 된다.', ex:'', warn:{ on:false, head:'', map:'', items:[] } }
+  ];
+  var TIP_TYPES = { sec:'큰 제목', sub:'소제목', item:'번호 항목', card:'법칙 카드' };
+  var TIP_ARROW = /\s*(?:→|->|▶|▷)\s*/;
+  state.tipEdit = false; state.tipDraft = null; state.tipBlocks = null;
+  var tipLastField = null;
+
+  function tipClone(o){ return JSON.parse(JSON.stringify(o)); }
+  function tipBlocks(){ return Array.isArray(state.tipBlocks) ? state.tipBlocks : TIP_DEFAULT; }
+  function tipNew(type){
+    if (type === 'item') return { t:'item', text:'', subs:'', sum:'', ex:'' };
+    if (type === 'card') return { t:'card', law:'', head:'', ex:'', warn:{ on:false, head:'', map:'', items:[] } };
+    return { t:type, text:'' };
+  }
   function tipMarkup(s){
     return esc(s).replace(/\{([rhbg])\|([^}]*)\}/g, function(_, k, t){
       return '<span class="tip-' + k + '">' + t + '</span>';
     });
   }
-  function tipBuild(){
+  function tipLines(s){ return String(s == null ? '' : s).split('\n').map(function(l){ return l.trim(); }).filter(Boolean); }
+
+  function tipBuild(blocks){
     var X = tipMarkup;
-    function sec(n, title){ return '<div class="tip-line l0"><span class="tip-num">' + n + '</span><span>' + X(title) + '</span></div>'; }
-    function sub(title){ return '<div class="tip-sub">' + X(title) + '</div>'; }
     function ol(items, red){ return '<ol class="tip-ol' + (red ? ' red' : '') + '">' + items.map(function(i){ return '<li>' + i + '</li>'; }).join('') + '</ol>'; }
     function ul(items){ return '<ul class="tip-ul">' + items.map(function(i){ return '<li>' + X(i) + '</li>'; }).join('') + '</ul>'; }
     function sum(text){ return '<div class="tip-sum"><span class="tip-sum-tag">즉</span><span>' + X(text) + '</span></div>'; }
-    function pair(k, v){ return '<span class="tip-pair"><span class="kr">' + X(k) + '</span><i class="arr">→</i><span class="jp">' + X(v) + '</span></span>'; }
-    function ex(inner){ return '<div class="tip-ex"><span class="tip-tag">예</span>' + inner + '</div>'; }
-    function map(rows, etc){
+    function exHtml(s){
+      var ls = tipLines(s);
+      if (!ls.length) return '';
+      return '<div class="tip-ex"><span class="tip-tag">예</span>' + ls.map(function(l){
+        var p = l.split(TIP_ARROW);
+        return '<span class="tip-pair"><span class="kr">' + X(p[0]) + '</span>' +
+          p.slice(1).map(function(x){ return '<i class="arr">→</i><span class="jp">' + X(x) + '</span>'; }).join('') + '</span>';
+      }).join('') + '</div>';
+    }
+    function mapRows(rows, etc){
       return '<div class="tip-map">' + rows.map(function(r){
         return '<div class="tip-m"><b>' + X(r[0]) + '</b><i>→</i><span class="jp">' + X(r[1]) + '</span></div>';
       }).join('') + (etc ? '<div class="tip-etc">등</div>' : '') + '</div>';
     }
-    function group(label, mapHtml){ return '<div class="tip-group"><span class="tip-gl">' + X(label) + '</span>' + mapHtml + '</div>'; }
-    function chips(rows){
-      return '<div class="tip-chips">' + rows.map(function(r){
-        return '<span class="tip-chip"><span class="kb">' + r[0] + '</span><span class="tip-g">' + r[1] + '</span><i>→</i><b>' + r[2] + '</b></span>';
+    // 대응표: 줄마다 "구 → ぐ(具)" / "# ㄱ" = 묶음 이름 / "등" = 말줄임
+    function mapHtml(s){
+      var groups = [], cur = null;
+      function g(label){ cur = { label:label, rows:[], etc:false }; groups.push(cur); }
+      tipLines(s).forEach(function(l){
+        if (l.charAt(0) === '#'){ g(l.slice(1).trim()); return; }
+        if (!cur) g('');
+        if (l === '등'){ cur.etc = true; return; }
+        var p = l.split(TIP_ARROW);
+        cur.rows.push([p[0], p.slice(1).join(' → ')]);
+      });
+      return groups.map(function(gr){
+        var m = mapRows(gr.rows, gr.etc);
+        return gr.label ? '<div class="tip-group"><span class="tip-gl">' + X(gr.label) + '</span>' + m + '</div>' : m;
+      }).join('');
+    }
+    function chipsHtml(s){
+      var ls = tipLines(s);
+      if (!ls.length) return '';
+      return '<div class="tip-chips">' + ls.map(function(l){
+        var p = l.split('|').map(function(x){ return x.trim(); });
+        return '<span class="tip-chip"><span class="kb">' + esc(p[0] || '') + '</span><span class="tip-g">' + esc(p[1] || '') + '</span><i>→</i><b>' + esc(p[2] || '') + '</b></span>';
       }).join('') + '</div>';
     }
-    function card(law, head, inner){
-      return '<div class="tip-card"><div class="tip-card-head"><span class="tip-law">' + law + '</span><span>' + X(head) + '</span></div>' + inner + '</div>';
+    function warnHtml(w){
+      if (!w || !w.on) return '';
+      var body = mapHtml(w.map);
+      var items = (w.items || []).map(function(it){ return X(it.text) + mapHtml(it.map) + chipsHtml(it.chips); });
+      if (items.length) body += ol(items, true);
+      return '<div class="tip-warn"><div class="tip-warn-head"><span class="tip-w">주의</span>' + (w.head ? '<span>' + X(w.head) + '</span>' : '') + '</div>' + body + '</div>';
     }
-    function warn(head, body){
-      return '<div class="tip-warn"><div class="tip-warn-head"><span class="tip-w">주의</span>' + (head ? '<span>' + X(head) + '</span>' : '') + '</div>' + (body || '') + '</div>';
+    var h = '', secN = 0, items = [];
+    function flush(){ if (items.length){ h += ol(items); items = []; } }
+    blocks.forEach(function(b){
+      if (b.t === 'item'){
+        var s = X(b.text);
+        if (tipLines(b.subs).length) s += ul(tipLines(b.subs));
+        if (b.sum && b.sum.trim()) s += sum(b.sum);
+        s += exHtml(b.ex);
+        items.push(s);
+        return;
+      }
+      flush();
+      if (b.t === 'sec'){ secN++; h += '<div class="tip-line l0"><span class="tip-num">' + secN + '</span><span>' + X(b.text) + '</span></div>'; }
+      else if (b.t === 'sub') h += '<div class="tip-sub">' + X(b.text) + '</div>';
+      else if (b.t === 'card'){
+        h += '<div class="tip-card"><div class="tip-card-head"><span class="tip-law">' + esc(b.law || '') + '</span><span>' + X(b.head) + '</span></div>' + exHtml(b.ex) + warnHtml(b.warn) + '</div>';
+      }
+    });
+    flush();
+    return h || '<div class="empty-note">내용이 없어요. ✏️ 편집으로 추가해 보세요.</div>';
+  }
+
+  // ----- 편집 화면 -----
+  function tipField(label, path, val, kind, rows, ph){
+    var a = ' data-p="' + path + '" placeholder="' + esc(ph || '') + '"';
+    return '<label>' + esc(label) + '</label>' + (kind === 'area'
+      ? '<textarea' + a + ' rows="' + (rows || 2) + '">' + esc(val) + '</textarea>'
+      : '<input type="text"' + a + ' value="' + esc(val) + '">');
+  }
+  var TIP_MAP_HELP = '줄마다 하나: 구 → {b|ぐ}{g|(具)}\n# ㄱ  ← 묶음 이름 (선택)\n등  ← 맨 끝에 "등" 표시';
+  function tipEditHtml(){
+    var d = state.tipDraft;
+    var bar = '<div class="tip-ed-bar"><span class="tip-ed-hint">글자를 선택하고 누르면 서식이 들어가요:</span>' +
+      [['r','빨강'],['h','형광펜'],['b','굵게'],['g','회색']].map(function(f){
+        return '<button type="button" class="tip-mini tip-fmt-' + f[0] + '" data-fmt="' + f[0] + '">' + f[1] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="tip-ed-hint2">화살표는 <b>-&gt;</b> 로 쳐도 → 로 바뀌어요. 블록 번호(1, 2, 3…)는 자동이에요.</div>';
+    var typeOpts = '<option value="">＋ 아래에 추가…</option>' + Object.keys(TIP_TYPES).map(function(k){ return '<option value="' + k + '">' + TIP_TYPES[k] + '</option>'; }).join('');
+    var blocks = d.map(function(b, i){
+      var head = '<div class="tip-ed-head"><span class="tip-ed-type">' + TIP_TYPES[b.t] + '</span><span class="tip-ed-spacer"></span>' +
+        '<select class="tip-mini" data-add-after="' + i + '">' + typeOpts + '</select>' +
+        '<button type="button" class="tip-mini" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button type="button" class="tip-mini" data-act="down" data-i="' + i + '"' + (i === d.length - 1 ? ' disabled' : '') + '>↓</button>' +
+        '<button type="button" class="tip-mini" data-act="del" data-i="' + i + '">✕</button></div>';
+      var body = '';
+      if (b.t === 'sec' || b.t === 'sub') body = tipField('제목', i + '.text', b.text, 'in');
+      else if (b.t === 'item'){
+        body = tipField('내용', i + '.text', b.text, 'area', 2) +
+          tipField('세부 항목 (선택, 줄마다 하나)', i + '.subs', b.subs, 'area', 2) +
+          tipField('즉 요약 (선택, 노란 박스)', i + '.sum', b.sum, 'in') +
+          tipField('예시 (선택, 줄마다 하나 · → 로 연결)', i + '.ex', b.ex, 'area', 2, '山 : 산 → ㅅ + ㅏ + ㄴ → {b|さん}');
+      } else if (b.t === 'card'){
+        var w = b.warn || (b.warn = { on:false, head:'', map:'', items:[] });
+        body = tipField('법칙 이름', i + '.law', b.law, 'in', 0, '초성 대응 ③') +
+          tipField('법칙 문장', i + '.head', b.head, 'area', 2) +
+          tipField('예시 (선택, 줄마다 하나 · → 로 연결)', i + '.ex', b.ex, 'area', 3, '운영(運営) → {b|う}ん{b|え}い') +
+          '<label class="tip-ck"><input type="checkbox" data-p="' + i + '.warn.on"' + (w.on ? ' checked' : '') + '> 빨간 「주의」 박스 넣기</label>';
+        if (w.on){
+          body += '<div class="tip-ed-sub"><div class="tip-ed-subtitle">주의 박스</div>' +
+            tipField('주의 머리말 (선택)', i + '.warn.head', w.head, 'in') +
+            tipField('대응표 (선택)', i + '.warn.map', w.map, 'area', 4, TIP_MAP_HELP) +
+            (w.items || []).map(function(it, j){
+              var p = i + '.warn.items.' + j;
+              return '<div class="tip-ed-item"><div class="tip-ed-head"><span class="tip-ed-type red">주의 항목 ' + (j + 1) + '</span><span class="tip-ed-spacer"></span>' +
+                '<button type="button" class="tip-mini" data-act="witem-del" data-i="' + i + '" data-j="' + j + '">✕</button></div>' +
+                tipField('내용', p + '.text', it.text, 'area', 2) +
+                tipField('대응표 (선택)', p + '.map', it.map, 'area', 4, TIP_MAP_HELP) +
+                tipField('칩 (선택, 줄마다 한자 | 한국음 | 읽기)', p + '.chips', it.chips, 'area', 3, '和 | 화 | わ') + '</div>';
+            }).join('') +
+            '<button type="button" class="tip-mini" data-act="witem-add" data-i="' + i + '">＋ 주의 항목 추가</button></div>';
+        }
+      }
+      return '<div class="tip-ed-block">' + head + body + '</div>';
+    }).join('');
+    var adds = '<div class="tip-ed-adds"><span>맨 끝에 추가:</span>' + Object.keys(TIP_TYPES).map(function(k){
+      return '<button type="button" class="tip-mini" data-act="add-end" data-type="' + k + '">＋ ' + TIP_TYPES[k] + '</button>';
+    }).join('') + '</div>';
+    return bar + blocks + adds;
+  }
+  function renderTip(){
+    var body = document.getElementById('tip-body'), ov = document.getElementById('tip-overlay'), acts = document.getElementById('tip-actions');
+    if (!body) return;
+    var st = ov.scrollTop;
+    if (state.tipEdit){
+      body.innerHTML = tipEditHtml();
+      acts.innerHTML = '<button type="button" class="primary" data-tip-act="save">저장</button><button type="button" class="secondary" data-tip-act="cancel">취소</button><button type="button" class="secondary warn" data-tip-act="reset">기본값</button>';
+    } else {
+      body.innerHTML = tipBuild(tipBlocks());
+      acts.innerHTML = '<button type="button" class="secondary" data-tip-act="edit">✏️ 편집</button>';
     }
-
-    var h = '';
-    // ===== 1. 기본 틀 =====
-    h += sec(1, '꼭 알아야 하는 한자 음독의 기본 틀');
-    h += sub('일본 한자음 (음독)의 절대 법칙');
-    h += ol([
-      X('한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다.') + ' <span class="tip-note">한자 → ○ or ○○</span>',
-      X('머리에는 {b|ん}, {b|ぱ행}은 올 수 없다.'),
-      X('일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.') +
-        ul(['자음이 있을 경우에는 k・t만 올 수 있다.', '모음은 u・i만 올 수 있다.', '그리고 ん이 올 수 있다.']) +
-        sum("'○ + う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다."),
-      X("한국어 발음은 일본어의 '음독'과 어느 정도 법칙적으로 대응한다.") +
-        ex('<span class="tip-pair"><span class="kr">山 : 산</span><i class="arr">→</i><span class="jp">ㅅ + ㅏ + ㄴ</span><i class="arr">→</i><span class="jp">s + a + N</span><i class="arr">→</i><span class="jp"><b>さん</b></span></span>'),
-      X('{b|종성} > {b|초성} > {b|중성} 순으로 법칙을 따를 확률이 높다.')
-    ]);
-
-    // ===== 2. 초성 대응 =====
-    h += sec(2, '초성의 기본 대응 7법칙');
-    h += card('초성 대응 ①', '초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.',
-      ex(pair('운영(運営)', '{b|う}ん{b|え}い') + pair('영원(永遠)', '{b|え}い{b|え}ん')) +
-      warn('단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.',
-        map([
-          ['어', '{b|ご}{g|(語・御)} / {b|ぎょ}{g|(魚)}'],
-          ['의', '{b|ぎ}{g|(義・儀・議・疑)}'],
-          ['월', '{b|げつ}{g|(月)}'],
-          ['양', '{b|じょう}{g|(嬢・醸・譲・壤)}'],
-          ['인', '{b|にん}{g|(忍・認)}'],
-          ['완', '{b|かん}{g|(完・緩)}']
-        ], true)));
-    h += card('초성 대응 ②', '초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.',
-      ex(pair('결혼(結婚)', '{b|け}っ{b|こ}ん') + pair('한국(韓国)', '{b|か}ん{b|こ}く')) +
-      warn('', ol([
-        X('ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음') +
-          group('ㄱ', map([['구', '{b|ぐ}{g|(具)}'], ['군', '{b|ぐん}{g|(軍・郡・群)}'], ['개', '{b|がい}{g|(概・慨)}']], true)) +
-          group('ㅎ', map([['해', '{b|がい}{g|(害・該・骸)}'], ['현', '{b|げん}{g|(現・玄)}'], ['환', '{b|げん}{g|(幻)}'], ['후', '{b|ご}{g|(後)}'], ['호', '{b|ごう}{g|(号・豪)}']], true)),
-        X('ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.') +
-          chips([['和', '화', 'わ'], ['賄', '회', 'わい'], ['惑', '혹', 'わく'], ['恵', '혜', 'え'], ['会', '회', 'かい・え'], ['横', '횡', 'おう'], ['黄', '황', 'おう']]),
-        X('ㅋ는 {b|快(쾌)[かい]} 한 글자뿐이니 어휘적으로 외워두기.')
-      ], true)));
-    return h;
+    ov.scrollTop = st;
+  }
+  function tipSetPath(root, path, val){
+    var p = path.split('.'), o = root;
+    for (var k = 0; k < p.length - 1; k++) o = o[p[k]];
+    o[p[p.length - 1]] = val;
+  }
+  function tipWrap(code){
+    var el = tipLastField;
+    if (!el || !document.body.contains(el) || !el.dataset.p) return;
+    var s = el.selectionStart, e = el.selectionEnd, v = el.value, sel = v.slice(s, e);
+    var ins = '{' + code + '|' + sel + '}';
+    el.value = v.slice(0, s) + ins + v.slice(e);
+    el.focus();
+    var pos = sel ? s + ins.length : s + 3;
+    el.setSelectionRange(pos, pos);
+    tipSetPath(state.tipDraft, el.dataset.p, el.value);
+  }
+  function tipBind(){
+    var body = document.getElementById('tip-body'), acts = document.getElementById('tip-actions');
+    body.addEventListener('focusin', function(e){ if (e.target.dataset && e.target.dataset.p) tipLastField = e.target; });
+    body.addEventListener('mousedown', function(e){ if (e.target.closest && e.target.closest('[data-fmt]')) e.preventDefault(); });
+    body.addEventListener('input', function(e){
+      var t = e.target;
+      if (!state.tipEdit || !t.dataset || !t.dataset.p || t.type === 'checkbox') return;
+      tipSetPath(state.tipDraft, t.dataset.p, t.value);
+    });
+    body.addEventListener('change', function(e){
+      var t = e.target;
+      if (!state.tipEdit) return;
+      if (t.type === 'checkbox' && t.dataset.p){ tipSetPath(state.tipDraft, t.dataset.p, t.checked); renderTip(); return; }
+      if (t.dataset && t.dataset.addAfter !== undefined && t.value){
+        state.tipDraft.splice(+t.dataset.addAfter + 1, 0, tipNew(t.value));
+        renderTip();
+      }
+    });
+    body.addEventListener('click', function(e){
+      if (!state.tipEdit) return;
+      var f = e.target.closest && e.target.closest('[data-fmt]');
+      if (f){ tipWrap(f.getAttribute('data-fmt')); return; }
+      var b = e.target.closest && e.target.closest('[data-act]');
+      if (!b) return;
+      var d = state.tipDraft, act = b.getAttribute('data-act'), i = +b.getAttribute('data-i'), j = +b.getAttribute('data-j');
+      if (act === 'up' && i > 0){ var a1 = d[i]; d[i] = d[i - 1]; d[i - 1] = a1; }
+      else if (act === 'down' && i < d.length - 1){ var a2 = d[i]; d[i] = d[i + 1]; d[i + 1] = a2; }
+      else if (act === 'del'){ if (!confirm('이 블록을 삭제할까요?')) return; d.splice(i, 1); }
+      else if (act === 'witem-add'){ d[i].warn.items.push({ text:'', map:'', chips:'' }); }
+      else if (act === 'witem-del'){ if (!confirm('이 주의 항목을 삭제할까요?')) return; d[i].warn.items.splice(j, 1); }
+      else if (act === 'add-end'){ d.push(tipNew(b.getAttribute('data-type'))); }
+      renderTip();
+      if (act === 'add-end') document.getElementById('tip-overlay').scrollTop = 1e6;
+    });
+    acts.addEventListener('click', function(e){
+      var b = e.target.closest && e.target.closest('[data-tip-act]');
+      if (!b) return;
+      var act = b.getAttribute('data-tip-act');
+      if (act === 'edit'){ state.tipDraft = tipClone(tipBlocks()); state.tipEdit = true; renderTip(); document.getElementById('tip-overlay').scrollTop = 0; }
+      else if (act === 'cancel'){ if (!confirm('편집한 내용을 버릴까요?')) return; state.tipEdit = false; state.tipDraft = null; renderTip(); }
+      else if (act === 'reset'){ if (!confirm('처음 내용으로 되돌릴까요? (저장 전까지는 취소할 수 있어요)')) return; state.tipDraft = tipClone(TIP_DEFAULT); renderTip(); }
+      else if (act === 'save'){
+        state.tipBlocks = tipClone(state.tipDraft);
+        if (settingsRef) settingsRef.set({ tipBlocks: state.tipBlocks }, { merge: true }).catch(function(err){ console.error(err); setSyncBadge('error'); });
+        state.tipEdit = false; state.tipDraft = null; renderTip();
+        document.getElementById('tip-overlay').scrollTop = 0;
+      }
+    });
   }
   function openTip(){
-    document.getElementById('tip-body').innerHTML = tipBuild();
+    state.tipEdit = false; state.tipDraft = null;
+    renderTip();
     document.getElementById('tip-overlay').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
     document.getElementById('tip-overlay').scrollTop = 0;
   }
   function closeTip(){
+    if (state.tipEdit && !confirm('편집 중인 내용이 저장되지 않아요. 닫을까요?')) return;
+    state.tipEdit = false; state.tipDraft = null;
     document.getElementById('tip-overlay').classList.add('hidden');
     document.body.style.overflow = '';
   }
+  tipBind();
   document.addEventListener('click', function(e){
     if (e.target.closest && e.target.closest('[data-open-tip]')) openTip();
   });
