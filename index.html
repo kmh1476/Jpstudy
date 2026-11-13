@@ -508,6 +508,9 @@
   .tip-ed-sub { margin-top: 10px; padding: 8px 10px 10px; border: 1.5px solid var(--hanko); border-radius: 5px; }
   .tip-ed-subtitle { font-size: 12px; font-weight: 700; color: var(--hanko); }
   .tip-ed-item { margin-top: 10px; padding: 8px 10px 10px; border: 1px dashed var(--hanko); border-radius: 4px; background: var(--paper-card); }
+  .tip-mini small { font-size: 10px; opacity: 0.65; margin-left: 3px; }
+  .tip-ed-savebar { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding: 10px 0 2px; background: var(--paper-card); border-top: 1px solid var(--line-strong); }
+  .tip-ed-savebar button { min-height: 38px; padding: 0 22px; }
   .tip-ed-adds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: var(--muted); }
 
 
@@ -3486,11 +3489,11 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var TIP_MAP_HELP = '줄마다 하나: 구 → {b|ぐ}{g|(具)}\n# ㄱ  ← 묶음 이름 (선택)\n등  ← 맨 끝에 "등" 표시';
   function tipEditHtml(){
     var d = state.tipDraft;
-    var bar = '<div class="tip-ed-bar"><span class="tip-ed-hint">글자를 선택하고 누르면 서식이 들어가요:</span>' +
-      [['r','빨강'],['h','형광펜'],['b','굵게'],['g','회색']].map(function(f){
-        return '<button type="button" class="tip-mini tip-fmt-' + f[0] + '" data-fmt="' + f[0] + '">' + f[1] + '</button>';
+    var bar = '<div class="tip-ed-bar"><span class="tip-ed-hint">글자를 선택하고 누르세요:</span>' +
+      [['b','굵게','Ctrl+B'],['r','빨강','Ctrl+R'],['h','형광펜','Ctrl+E'],['g','회색','']].map(function(f){
+        return '<button type="button" class="tip-mini tip-fmt-' + f[0] + '" data-fmt="' + f[0] + '">' + f[1] + (f[2] ? ' <small>' + f[2] + '</small>' : '') + '</button>';
       }).join('') + '</div>' +
-      '<div class="tip-ed-hint2">화살표는 <b>-&gt;</b> 로 쳐도 → 로 바뀌어요. 블록 번호(1, 2, 3…)는 자동이에요.</div>';
+      '<div class="tip-ed-hint2">단축키: <b>Ctrl+B</b> 굵게 · <b>Ctrl+R</b> 빨강 · <b>Ctrl+E</b> 형광펜 (선택 없이 누르면 빈 서식이 들어가요). 화살표는 <b>-&gt;</b> 로 쳐도 → 로 바뀌어요. 블록 번호(1, 2, 3…)는 자동이에요.</div>';
     var typeOpts = '<option value="">＋ 아래에 추가…</option>' + Object.keys(TIP_TYPES).map(function(k){ return '<option value="' + k + '">' + TIP_TYPES[k] + '</option>'; }).join('');
     var blocks = d.map(function(b, i){
       var head = '<div class="tip-ed-head"><span class="tip-ed-type">' + TIP_TYPES[b.t] + '</span><span class="tip-ed-spacer"></span>' +
@@ -3531,7 +3534,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var adds = '<div class="tip-ed-adds"><span>맨 끝에 추가:</span>' + Object.keys(TIP_TYPES).map(function(k){
       return '<button type="button" class="tip-mini" data-act="add-end" data-type="' + k + '">＋ ' + TIP_TYPES[k] + '</button>';
     }).join('') + '</div>';
-    return bar + blocks + adds;
+    var saveBar = '<div class="tip-ed-savebar"><button type="button" class="secondary" data-tip-act="cancel">취소</button><button type="button" class="primary" data-tip-act="save">저장</button></div>';
+    return bar + blocks + adds + saveBar;
   }
   function renderTip(){
     var body = document.getElementById('tip-body'), ov = document.getElementById('tip-overlay'), acts = document.getElementById('tip-actions');
@@ -3581,6 +3585,8 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       }
     });
     body.addEventListener('click', function(e){
+      var ta = e.target.closest && e.target.closest('[data-tip-act]');
+      if (ta){ tipAct(ta.getAttribute('data-tip-act')); return; }
       if (!state.tipEdit) return;
       var f = e.target.closest && e.target.closest('[data-fmt]');
       if (f){ tipWrap(f.getAttribute('data-fmt')); return; }
@@ -3598,18 +3604,30 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     });
     acts.addEventListener('click', function(e){
       var b = e.target.closest && e.target.closest('[data-tip-act]');
-      if (!b) return;
-      var act = b.getAttribute('data-tip-act');
-      if (act === 'edit'){ state.tipDraft = tipClone(tipBlocks()); state.tipEdit = true; renderTip(); document.getElementById('tip-overlay').scrollTop = 0; }
-      else if (act === 'cancel'){ if (!confirm('편집한 내용을 버릴까요?')) return; state.tipEdit = false; state.tipDraft = null; renderTip(); }
-      else if (act === 'reset'){ if (!confirm('처음 내용으로 되돌릴까요? (저장 전까지는 취소할 수 있어요)')) return; state.tipDraft = tipClone(TIP_DEFAULT); renderTip(); }
-      else if (act === 'save'){
-        state.tipBlocks = tipClone(state.tipDraft);
-        if (settingsRef) settingsRef.set({ tipBlocks: state.tipBlocks }, { merge: true }).catch(function(err){ console.error(err); setSyncBadge('error'); });
-        state.tipEdit = false; state.tipDraft = null; renderTip();
-        document.getElementById('tip-overlay').scrollTop = 0;
-      }
+      if (b) tipAct(b.getAttribute('data-tip-act'));
     });
+    // 단축키: Ctrl(⌘)+B 굵게 · Ctrl+R 빨강 · Ctrl+E 형광펜  (입력칸에 커서가 있을 때)
+    body.addEventListener('keydown', function(e){
+      if (!state.tipEdit || e.isComposing || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      var t = e.target;
+      if (!t || !t.dataset || !t.dataset.p || t.type === 'checkbox') return;
+      var code = { b:'b', r:'r', e:'h' }[String(e.key).toLowerCase()];
+      if (!code) return;
+      e.preventDefault();   // 브라우저 새로고침(Ctrl+R) 등이 실행되지 않게
+      tipLastField = t;
+      tipWrap(code);
+    });
+  }
+  function tipAct(act){
+    if (act === 'edit'){ state.tipDraft = tipClone(tipBlocks()); state.tipEdit = true; renderTip(); document.getElementById('tip-overlay').scrollTop = 0; }
+    else if (act === 'cancel'){ if (!confirm('편집한 내용을 버릴까요?')) return; state.tipEdit = false; state.tipDraft = null; renderTip(); }
+    else if (act === 'reset'){ if (!confirm('처음 내용으로 되돌릴까요? (저장 전까지는 취소할 수 있어요)')) return; state.tipDraft = tipClone(TIP_DEFAULT); renderTip(); }
+    else if (act === 'save'){
+      state.tipBlocks = tipClone(state.tipDraft);
+      if (settingsRef) settingsRef.set({ tipBlocks: state.tipBlocks }, { merge: true }).catch(function(err){ console.error(err); setSyncBadge('error'); });
+      state.tipEdit = false; state.tipDraft = null; renderTip();
+      document.getElementById('tip-overlay').scrollTop = 0;
+    }
   }
   function openTip(){
     state.tipEdit = false; state.tipDraft = null;
