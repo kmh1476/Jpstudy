@@ -429,8 +429,12 @@
   .tip-head h2 { margin: 0; font-size: 19px; }
   .tip-body { font-size: 14.5px; line-height: 1.8; }
   .tip-line { margin: 3px 0; }
-  .tip-line.l0 { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; font-weight: 700; font-size: 16px; margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--line-strong); color: var(--purple-acc); }
-  .tip-line.l0:first-child { margin-top: 8px; }
+  .tip-line.l0 { display: flex; align-items: center; gap: 12px; font-family: 'Noto Serif JP', 'Noto Sans KR', serif; font-weight: 700; font-size: 19px; line-height: 1.4; margin: 28px 0 12px; padding: 10px 14px; background: var(--ink); color: var(--paper-card); border-left: 8px solid var(--hanko); border-radius: 3px; }
+  .tip-line.l0:first-child { margin-top: 10px; }
+  .tip-num { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; background: var(--hanko); color: #fff; border-radius: 3px; font-size: 18px; }
+  .tip-w { display: inline-block; border: 1.5px solid var(--hanko); color: var(--hanko); font-weight: 700; font-size: 12.5px; line-height: 1.5; padding: 0 8px; border-radius: 3px; margin-right: 6px; }
+  .tip-head { padding-bottom: 10px; border-bottom: 3px solid var(--hanko); margin-bottom: 14px; }
+  .tip-head h2 { font-size: 22px !important; }
   .tip-line.l1 { font-weight: 700; margin-top: 12px; }
   .tip-line.l2 { margin-left: 18px; }
   .tip-line.l3 { margin-left: 38px; }
@@ -3285,42 +3289,44 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   var KANJI_TIP = [
     [0, '1. 꼭 알아야 하는 한자 음독의 기본 틀'],
     [1, '1) 일본 한자음 (음독)의 절대 법칙'],
-    [2, '1] 한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다. (한자 → ○ or ○○)'],
-    [2, '2] 머리에는 ん, ぱ행은 올 수 없다.'],
-    [2, '3] 일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.'],
-    [3, '1)) 자음이 있을 경우에는 k・t만 올 수 있다.'],
-    [3, '2)) 모음은 u・i만 올 수 있다.'],
-    [3, '3)) 그리고 ん이 올 수 있다.'],
+    [2, '(1) 한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다. (한자 → ○ or ○○)'],
+    [2, '(2) 머리에는 ん, ぱ행은 올 수 없다.'],
+    [2, '(3) 일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.'],
+    [3, '가) 자음이 있을 경우에는 k・t만 올 수 있다.'],
+    [3, '나) 모음은 u・i만 올 수 있다.'],
+    [3, '다) 그리고 ん이 올 수 있다.'],
     [3, "▶ 즉, '○+う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다.", 'tip-b'],
-    [2, '4] 한국어 발음은 일본어의 \'음독\'과 어느 정도 법칙적으로 대응한다.'],
+    [2, '(4) 한국어 발음은 일본어의 \'음독\'과 어느 정도 법칙적으로 대응한다.'],
     [3, '예) 山: 산 ▶ ㅅ + ㅏ + ㄴ → s + a + N ▶ さん', 'ex'],
-    [2, '5] 종성>초성>중성 순으로 법칙을 따를 확률이 높다.'],
+    [2, '(5) 종성>초성>중성 순으로 법칙을 따를 확률이 높다.'],
 
     [0, '2. 초성의 기본 대응 7법칙'],
     [1, '기본 초성 대응 ① 초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.', 'rule'],
     [2, '예) 운영(運営): {b|う}ん{b|え}い | 영원(永遠): {b|え}い{b|え}ん', 'ex'],
-    [2, '{b|주의}: 단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.'],
+    [2, '{w|주의} 단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.'],
     [3, '어 ▷ ご(語・御)/ぎょ(魚) | 의 ▷ ぎ(義・儀・議・疑) | 월 ▷ げつ(月) 등'],
     [3, '양 ▷ じょう(嬢・醸・譲・壤) | 인 ▷ にん(忍・認) | 완 ▷ (完・緩) 등'],
 
     [1, '기본 초성 대응 ② 초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.', 'rule'],
     [2, '예) 결혼(結婚): {b|け}っ{b|こ}ん | 한국(韓国): {b|か}ん{b|こ}く', 'ex'],
-    [2, '{b|주의}'],
-    [3, '1_ ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음'],
+    [2, '{w|주의}'],
+    [3, '가) ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음'],
     [4, '{b|ㄱ} ▶ {b|구} ▷ ぐ(具) | {b|군} ▷ ぐん(軍・郡・群) | {b|개} ▷ がい(概・慨) 등'],
     [4, '{b|ㅎ} ▶ {b|해} ▷ がい(害・該・骸) | {b|현} ▷ げん(現・玄) | {b|환} ▷ げん(幻) | {b|후} ▷ ご(後) | {b|호} ▷ ごう(号・豪) 등'],
-    [3, '2_ ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.'],
+    [3, '나) ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.'],
     [4, '和(화)[わ], 賄(회)[わい], 惑(혹)[わく], 恵(혜)[え], 会(회)[かい・え], 横(횡)[おう], 黄(황)[おう]', 'ex'],
-    [3, '3_ ㅋ는 快(쾌)[かい] 한 글자뿐이니 어휘적으로 외워두기.']
+    [3, '다) ㅋ는 快(쾌)[かい] 한 글자뿐이니 어휘적으로 외워두기.']
   ];
   function tipMarkup(s){
-    return esc(s).replace(/\{([rhb])\|([^}]*)\}/g, function(_, k, t){
+    return esc(s).replace(/\{([rhbw])\|([^}]*)\}/g, function(_, k, t){
       return '<span class="tip-' + k + '">' + t + '</span>';
     });
   }
   function openTip(){
     document.getElementById('tip-body').innerHTML = KANJI_TIP.map(function(r){
-      return '<div class="tip-line l' + r[0] + (r[2] ? ' ' + r[2] : '') + '">' + tipMarkup(r[1]) + '</div>';
+      var html = tipMarkup(r[1]);
+      if (r[0] === 0) html = html.replace(/^(\d+)\.\s*(.*)$/, '<span class="tip-num">$1</span><span>$2</span>');
+      return '<div class="tip-line l' + r[0] + (r[2] ? ' ' + r[2] : '') + '">' + html + '</div>';
     }).join('');
     document.getElementById('tip-overlay').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
