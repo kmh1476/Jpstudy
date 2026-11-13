@@ -419,6 +419,28 @@
   .search-row .search-input { flex: 1; min-width: 0; }
   .filter-toggle { flex-shrink: 0; white-space: nowrap; }
   .filter-toggle.on { border-color: var(--jade); color: var(--jade); font-weight: 700; }
+  .tip-btn { border-color: var(--purple-acc) !important; color: var(--purple-acc) !important; font-weight: 700; }
+  .tip-btn:hover { background: var(--paper2) !important; }
+
+  /* 한일 한자음 대응 팁 */
+  #tip-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,0.45); z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 24px 14px; overflow-y: auto; }
+  .tip-box { width: 100%; max-width: 720px; background: var(--paper-card); border: 1px solid var(--line-strong); border-radius: 4px; padding: 18px 22px 26px; }
+  .tip-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 10px; }
+  .tip-head h2 { margin: 0; font-size: 19px; }
+  .tip-body { font-size: 14.5px; line-height: 1.8; }
+  .tip-line { margin: 3px 0; }
+  .tip-line.l0 { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; font-weight: 700; font-size: 16px; margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--line-strong); color: var(--purple-acc); }
+  .tip-line.l0:first-child { margin-top: 8px; }
+  .tip-line.l1 { font-weight: 700; margin-top: 12px; }
+  .tip-line.l2 { margin-left: 18px; }
+  .tip-line.l3 { margin-left: 38px; }
+  .tip-line.l4 { margin-left: 58px; }
+  .tip-line.rule { margin-top: 18px; padding: 6px 10px; border-left: 4px solid var(--indigo); background: var(--paper); font-weight: 500; }
+  .tip-line.ex { font-family: 'Noto Serif JP', 'Noto Sans KR', serif; }
+  .tip-r { color: var(--hanko); font-weight: 700; }
+  .tip-h { background: rgba(255, 224, 51, 0.7); border-radius: 2px; padding: 0 3px; }
+  :root[data-theme="dark"] .tip-h { background: rgba(255, 214, 0, 0.35); }
+  .tip-b { font-weight: 700; }
   .filter-box { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper2); }
   .filter-box .topic-select { max-width: none; }
 
@@ -494,6 +516,16 @@
       <button type="button" class="secondary" id="settings-close">닫기</button>
     </div>
     <div id="settings-body"></div>
+  </div>
+</div>
+
+<div id="tip-overlay" class="hidden">
+  <div class="tip-box" role="dialog" aria-label="한일 한자음 대응관계 24법칙">
+    <div class="tip-head">
+      <h2 class="serif">💡 한일 한자음 대응관계 24법칙</h2>
+      <button type="button" class="secondary" id="tip-close">닫기</button>
+    </div>
+    <div class="tip-body" id="tip-body"></div>
   </div>
 </div>
 
@@ -2529,6 +2561,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<div class="search-row">' +
         '<input type="text" class="search-input" id="'+cat+'-search" placeholder="검색 (단어·뜻·읽기·주제 등)" value="'+esc(state.search[cat]||'')+'">' +
         '<button type="button" class="filter-toggle" id="'+cat+'-filter-toggle"></button>' +
+        (cat === 'kanji' ? '<button type="button" class="filter-toggle tip-btn" data-open-tip="kanji" title="한일 한자음 대응관계 24법칙">💡 팁</button>' : '') +
       '</div>' +
       '<div class="filter-box'+(state.filterOpen[cat] ? '' : ' hidden')+'" id="'+cat+'-filter-box">' +
         (isTopicCat(cat) ? '<div class="kana-row" id="'+cat+'-topic-row"></div>' : '') +
@@ -3247,6 +3280,66 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   document.addEventListener('click', function(e){
     if (!(e.target.closest && e.target.closest('.global-search'))) hideGlobalResults();
   });
+  // ---------- 한일 한자음 대응관계 24법칙 (팁) ----------
+  // 서식: {r|빨간색} {h|형광펜 노란색} {b|굵게}.  [들여쓰기단계, 글, 추가클래스]
+  var KANJI_TIP = [
+    [0, '1. 꼭 알아야 하는 한자 음독의 기본 틀'],
+    [1, '1) 일본 한자음 (음독)의 절대 법칙'],
+    [2, '1] 한 글자의 일본 한자는 히라가나로 1~2자로만 읽을 수 있다. (한자 → ○ or ○○)'],
+    [2, '2] 머리에는 ん, ぱ행은 올 수 없다.'],
+    [2, '3] 일본어의 두 번째 글자(○●)에는 한정된 글자만 올 수 있다.'],
+    [3, '1)) 자음이 있을 경우에는 k・t만 올 수 있다.'],
+    [3, '2)) 모음은 u・i만 올 수 있다.'],
+    [3, '3)) 그리고 ん이 올 수 있다.'],
+    [3, "▶ 즉, '○+う/い・く/き・つ/ち・ん'만이 두 번째 글자로 올 수 있다.", 'tip-b'],
+    [2, '4] 한국어 발음은 일본어의 \'음독\'과 어느 정도 법칙적으로 대응한다.'],
+    [3, '예) 山: 산 ▶ ㅅ + ㅏ + ㄴ → s + a + N ▶ さん', 'ex'],
+    [2, '5] 종성>초성>중성 순으로 법칙을 따를 확률이 높다.'],
+
+    [0, '2. 초성의 기본 대응 7법칙'],
+    [1, '기본 초성 대응 ① 초성 {r|ㅇ}은 기본적으로 {h|자음이 없는 모음}이 된다.', 'rule'],
+    [2, '예) 운영(運営): {b|う}ん{b|え}い | 영원(永遠): {b|え}い{b|え}ん', 'ex'],
+    [2, '{b|주의}: 단, 일부는 が행(22%), ざ행(7%), な행(7%), か행(3%)로 읽는다.'],
+    [3, '어 ▷ ご(語・御)/ぎょ(魚) | 의 ▷ ぎ(義・儀・議・疑) | 월 ▷ げつ(月) 등'],
+    [3, '양 ▷ じょう(嬢・醸・譲・壤) | 인 ▷ にん(忍・認) | 완 ▷ (完・緩) 등'],
+
+    [1, '기본 초성 대응 ② 초성 {r|ㄱ ㅋ ㅎ}은 기본적으로 {h|か행}이 된다.', 'rule'],
+    [2, '예) 결혼(結婚): {b|け}っ{b|こ}ん | 한국(韓国): {b|か}ん{b|こ}く', 'ex'],
+    [2, '{b|주의}'],
+    [3, '1_ ㄱㅎ의 경우, が행으로 읽히는 한자들도 일정 수 이상 있음'],
+    [4, '{b|ㄱ} ▶ {b|구} ▷ ぐ(具) | {b|군} ▷ ぐん(軍・郡・群) | {b|개} ▷ がい(概・慨) 등'],
+    [4, '{b|ㅎ} ▶ {b|해} ▷ がい(害・該・骸) | {b|현} ▷ げん(現・玄) | {b|환} ▷ げん(幻) | {b|후} ▷ ご(後) | {b|호} ▷ ごう(号・豪) 등'],
+    [3, '2_ ㅎ의 경우, 다음 7자에서는 모음(あ행 및 わ)으로 읽는 경우가 존재하니 주의.'],
+    [4, '和(화)[わ], 賄(회)[わい], 惑(혹)[わく], 恵(혜)[え], 会(회)[かい・え], 横(횡)[おう], 黄(황)[おう]', 'ex'],
+    [3, '3_ ㅋ는 快(쾌)[かい] 한 글자뿐이니 어휘적으로 외워두기.']
+  ];
+  function tipMarkup(s){
+    return esc(s).replace(/\{([rhb])\|([^}]*)\}/g, function(_, k, t){
+      return '<span class="tip-' + k + '">' + t + '</span>';
+    });
+  }
+  function openTip(){
+    document.getElementById('tip-body').innerHTML = KANJI_TIP.map(function(r){
+      return '<div class="tip-line l' + r[0] + (r[2] ? ' ' + r[2] : '') + '">' + tipMarkup(r[1]) + '</div>';
+    }).join('');
+    document.getElementById('tip-overlay').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('tip-overlay').scrollTop = 0;
+  }
+  function closeTip(){
+    document.getElementById('tip-overlay').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('click', function(e){
+    if (e.target.closest && e.target.closest('[data-open-tip]')) openTip();
+  });
+  document.getElementById('tip-close').addEventListener('click', closeTip);
+  document.getElementById('tip-overlay').addEventListener('click', function(e){ if (e.target === this) closeTip(); });
+  document.addEventListener('keydown', function(e){
+    var ov = document.getElementById('tip-overlay');
+    if (e.key === 'Escape' && ov && !ov.classList.contains('hidden')) closeTip();
+  });
+
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   document.getElementById('settings-overlay').addEventListener('click', function(e){
     if (e.target === this) closeSettings();
