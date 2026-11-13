@@ -471,6 +471,20 @@
   .tip-warn { margin-top: 12px; border: 1.5px solid var(--hanko); border-radius: 5px; background: var(--paper-card); padding: 10px 14px 10px; }
   .tip-warn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
   .tip-warn-head .tip-w { margin-right: 0; }
+  /* 접기/펼치기 */
+  details.tip-sec { margin: 0; }
+  details.tip-sec > summary.tip-line.l0 { cursor: pointer; list-style: none; margin: 14px 0 8px; user-select: none; }
+  details.tip-sec:first-child > summary.tip-line.l0 { margin-top: 10px; }
+  details.tip-sec > summary::-webkit-details-marker, details.tip-warn > summary::-webkit-details-marker { display: none; }
+  details.tip-sec > summary > span:nth-child(2) { flex: 1; min-width: 0; }
+  .tip-chev { flex-shrink: 0; margin-left: auto; font-size: 14px; opacity: 0.85; transition: transform 0.15s; }
+  details[open] > summary > .tip-chev { transform: rotate(90deg); }
+  .tip-sec-body { padding: 2px 0 10px; }
+  details.tip-warn { padding: 0; }
+  details.tip-warn > summary.tip-warn-head { cursor: pointer; list-style: none; margin: 0; padding: 10px 14px; user-select: none; }
+  details.tip-warn > summary .tip-chev { color: var(--hanko); }
+  details.tip-warn[open] > summary.tip-warn-head { border-bottom: 1px dashed var(--hanko); margin-bottom: 8px; }
+  details.tip-warn > .tip-warn-body { padding: 0 14px 12px; }
   .tip-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 3px 16px; margin-top: 6px; }
   .tip-m { display: flex; align-items: baseline; font-size: 14px; }
   .tip-m b { min-width: 1.5em; }
@@ -3468,10 +3482,13 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       var body = mapHtml(w.map);
       var items = (w.items || []).map(function(it){ return X(it.text) + mapHtml(it.map) + chipsHtml(it.chips); });
       if (items.length) body += ol(items, true);
-      return '<div class="tip-warn"><div class="tip-warn-head"><span class="tip-w">주의</span>' + (w.head ? '<span>' + X(w.head) + '</span>' : '') + '</div>' + body + '</div>';
+      var headInner = '<span class="tip-w">주의</span>' + (w.head ? '<span>' + X(w.head) + '</span>' : '');
+      if (!body) return '<div class="tip-warn"><div class="tip-warn-head">' + headInner + '</div></div>';
+      return '<details class="tip-warn"><summary class="tip-warn-head">' + headInner + '<span class="tip-chev">▶</span></summary><div class="tip-warn-body">' + body + '</div></details>';
     }
-    var h = '', secN = 0, items = [];
+    var h = '', secN = 0, items = [], secOpen = false;
     function flush(){ if (items.length){ h += ol(items); items = []; } }
+    function closeSec(){ if (secOpen){ h += '</div></details>'; secOpen = false; } }
     blocks.forEach(function(b){
       if (b.t === 'item'){
         var s = X(b.text);
@@ -3482,13 +3499,14 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return;
       }
       flush();
-      if (b.t === 'sec'){ secN++; h += '<div class="tip-line l0"><span class="tip-num">' + secN + '</span><span>' + X(b.text) + '</span></div>'; }
+      if (b.t === 'sec'){ closeSec(); secN++; secOpen = true; h += '<details class="tip-sec"><summary class="tip-line l0"><span class="tip-num">' + secN + '</span><span>' + X(b.text) + '</span><span class="tip-chev">▶</span></summary><div class="tip-sec-body">'; }
       else if (b.t === 'sub') h += '<div class="tip-sub">' + X(b.text) + '</div>';
       else if (b.t === 'card'){
         h += '<div class="tip-card"><div class="tip-card-head"><span class="tip-law">' + esc(b.law || '') + '</span><span>' + X(b.head) + '</span></div>' + exHtml(b.ex) + warnHtml(b.warn) + '</div>';
       }
     });
     flush();
+    closeSec();
     return h || '<div class="empty-note">내용이 없어요. ✏️ 편집으로 추가해 보세요.</div>';
   }
 
@@ -3556,7 +3574,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
     var st = ov.scrollTop;
     if (state.tipEdit){
       body.innerHTML = tipEditHtml();
-      acts.innerHTML = '<button type="button" class="primary" data-tip-act="save">저장</button><button type="button" class="secondary" data-tip-act="cancel">취소</button><button type="button" class="secondary warn" data-tip-act="reset">기본값</button>';
+      acts.innerHTML = '<button type="button" class="primary" data-tip-act="save">저장</button><button type="button" class="secondary" data-tip-act="cancel">취소</button>';
     } else {
       body.innerHTML = tipBuild(tipBlocks());
       acts.innerHTML = '<button type="button" class="secondary" data-tip-act="edit">✏️ 편집</button>';
@@ -3634,7 +3652,6 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function tipAct(act){
     if (act === 'edit'){ state.tipDraft = tipClone(tipBlocks()); state.tipEdit = true; renderTip(); document.getElementById('tip-overlay').scrollTop = 0; }
     else if (act === 'cancel'){ if (!confirm('편집한 내용을 버릴까요?')) return; state.tipEdit = false; state.tipDraft = null; renderTip(); }
-    else if (act === 'reset'){ if (!confirm('처음 내용으로 되돌릴까요? (저장 전까지는 취소할 수 있어요)')) return; state.tipDraft = tipClone(TIP_DEFAULT); renderTip(); }
     else if (act === 'save'){
       state.tipBlocks = tipClone(state.tipDraft);
       if (settingsRef) settingsRef.set({ tipBlocks: state.tipBlocks }, { merge: true }).catch(function(err){ console.error(err); setSyncBadge('error'); });
