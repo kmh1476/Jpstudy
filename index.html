@@ -467,6 +467,7 @@
   .tip-pair .arr, .tip-m i { font-style: normal; color: var(--muted); margin: 0 6px; }
   .tip-card { border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); padding: 12px 14px 14px; margin: 14px 0; }
   .tip-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 500; font-size: 15px; }
+  .tip-card-head > span:last-child { flex: 1; min-width: 0; line-height: 1.9; }
   .tip-law { flex-shrink: 0; background: var(--indigo); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 10px; border-radius: 3px; }
   .tip-warn { margin-top: 12px; border: 1.5px solid var(--hanko); border-radius: 5px; background: var(--paper-card); padding: 10px 14px 10px; }
   .tip-warn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -3430,7 +3431,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
   function tipMarkup(s){
     return tipJpWrap(esc(s)).replace(/\{([rhbgu])\|([^}]*)\}/g, function(_, k, t){
       return '<span class="tip-' + k + '">' + t + '</span>';
-    });
+    }).replace(/\n/g, '<br>');
   }
   function tipLines(s){ return String(s == null ? '' : s).split('\n').map(function(l){ return l.trim(); }).filter(Boolean); }
 
