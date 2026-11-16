@@ -467,7 +467,11 @@
   .tip-pair .arr, .tip-m i { font-style: normal; color: var(--muted); margin: 0 6px; }
   .tip-card { border: 1px solid var(--line-strong); border-radius: 6px; background: var(--paper); padding: 12px 14px 14px; margin: 14px 0; }
   .tip-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-weight: 500; font-size: 15px; }
-  .tip-card-head > span:last-child { flex: 1; min-width: 0; line-height: 1.9; }
+details.tip-card > summary.tip-card-head { cursor: pointer; list-style: none; user-select: none; }
+details.tip-card > summary::-webkit-details-marker { display: none; }
+.tip-card-text { flex: 1; min-width: 0; line-height: 1.9; }
+.tip-card-body { margin-top: 10px; padding-top: 4px; border-top: 1px dashed var(--line-strong); }
+.tip-warn-body { margin-top: 4px; }
   .tip-law { flex-shrink: 0; background: var(--indigo); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 10px; border-radius: 3px; }
   .tip-warn { margin-top: 12px; border: 1.5px solid var(--hanko); border-radius: 5px; background: var(--paper-card); padding: 10px 14px 10px; }
   .tip-warn-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
@@ -3478,15 +3482,15 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
         return '<span class="tip-chip"><span class="kb">' + esc(p[0] || '') + '</span><span class="tip-g">' + esc(p[1] || '') + '</span><i>→</i><b>' + tipJpWrap(esc(p[2] || '')) + '</b></span>';
       }).join('') + '</div>';
     }
-    function warnHtml(w){
-      if (!w || !w.on) return '';
-      var body = mapHtml(w.map);
-      var items = (w.items || []).map(function(it){ return X(it.text) + mapHtml(it.map) + chipsHtml(it.chips); });
-      if (items.length) body += ol(items, true);
-      var headInner = '<span class="tip-w">주의</span>' + (w.head ? '<span>' + X(w.head) + '</span>' : '');
-      if (!body) return '<div class="tip-warn"><div class="tip-warn-head">' + headInner + '</div></div>';
-      return '<details class="tip-warn"><summary class="tip-warn-head">' + headInner + '<span class="tip-chev">▶</span></summary><div class="tip-warn-body">' + body + '</div></details>';
-    }
+function warnHtml(w){
+  if (!w || !w.on) return '';
+  var body = mapHtml(w.map);
+  var items = (w.items || []).map(function(it){ return X(it.text) + mapHtml(it.map) + chipsHtml(it.chips); });
+  if (items.length) body += ol(items, true);
+  var headInner = '<span class="tip-w">주의</span>' + (w.head ? '<span>' + X(w.head) + '</span>' : '');
+  return '<div class="tip-warn"><div class="tip-warn-head">' + headInner + '</div>' +
+    (body ? '<div class="tip-warn-body">' + body + '</div>' : '') + '</div>';
+}
     var h = '', secN = 0, items = [], secOpen = false;
     function flush(){ if (items.length){ h += ol(items); items = []; } }
     function closeSec(){ if (secOpen){ h += '</div></details>'; secOpen = false; } }
@@ -3502,9 +3506,17 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       flush();
       if (b.t === 'sec'){ closeSec(); secN++; secOpen = true; h += '<details class="tip-sec"><summary class="tip-line l0"><span class="tip-num">' + secN + '</span><span>' + X(b.text) + '</span><span class="tip-chev">▶</span></summary><div class="tip-sec-body">'; }
       else if (b.t === 'sub') h += '<div class="tip-sub">' + X(b.text) + '</div>';
-      else if (b.t === 'card'){
-        h += '<div class="tip-card"><div class="tip-card-head"><span class="tip-law">' + esc(b.law || '') + '</span><span>' + X(b.head) + '</span></div>' + exHtml(b.ex) + warnHtml(b.warn) + '</div>';
-      }
+     else if (b.t === 'card'){
+  var headRow = '<span class="tip-law">' + esc(b.law || '') + '</span><span class="tip-card-text">' + X(b.head) + '</span>';
+  var inner = exHtml(b.ex) + warnHtml(b.warn);
+  if (!inner){
+    // 예시·주의가 없는 카드는 접을 내용이 없으니 화살표 없이 그대로 표시
+    h += '<div class="tip-card"><div class="tip-card-head">' + headRow + '</div></div>';
+  } else {
+    h += '<details class="tip-card"><summary class="tip-card-head">' + headRow + '<span class="tip-chev">▶</span></summary>' +
+         '<div class="tip-card-body">' + inner + '</div></details>';
+  }
+}
     });
     flush();
     closeSec();
