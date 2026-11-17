@@ -2031,7 +2031,7 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(e){
       '<'+tag+' id="'+id+'"'+(field.type==='textarea'?'':' type="text"')+valueAttr+'>'+inner+'</'+tag+'>' +
       '</div>';
   }
-  var JLPT_LEVELS = ['N1','N2','N3','N4','급수 외'];
+  var JLPT_LEVELS = ['N1','N2','N3','N4','N5','급수 외'];
   function kanjiLevelHtml(prefix, value){
     value = JLPT_LEVELS.indexOf(value) >= 0 ? value : '';
     return '<div class="full"><label>JLPT 급수</label><div class="rg-seg jlpt-seg" role="radiogroup" aria-label="JLPT 급수" data-jlpt-prefix="'+prefix+'">' +
